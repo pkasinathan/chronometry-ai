@@ -12,7 +12,6 @@ from datetime import datetime
 from pathlib import Path
 
 import rumps
-from pynput import keyboard
 
 from chronometry.annotate import annotate_frames
 from chronometry.capture import (
@@ -545,28 +544,72 @@ class ChronometryApp(rumps.App):
         rumps.alert("Chronometry Statistics", message)
 
     def setup_hotkey(self):
-        """Setup global hotkey listener for Cmd+Shift+6."""
+        """Setup global hotkey listener for Cmd+Shift+6.
 
-        def on_activate():
-            """Callback when hotkey is pressed."""
-            logger.info("Hotkey Cmd+Shift+6 pressed - triggering region capture")
-            self.capture_region_now()
-
-        # Define the hotkey combination: Cmd+Shift+6
-        hotkey = keyboard.HotKey(keyboard.HotKey.parse("<cmd>+<shift>+6"), on_activate)
-
-        def for_canonical(f):
-            """Helper to convert key to canonical form."""
-            return lambda k: f(keyboard_listener.canonical(k))
-
-        # Create keyboard listener
-        keyboard_listener = keyboard.Listener(
-            on_press=for_canonical(hotkey.press), on_release=for_canonical(hotkey.release)
+        Uses a Quartz CGEventTap matching by virtual key code (VK_ANSI_6 = 22),
+        which is shift-invariant. pynput's HotKey class cannot match shifted
+        number keys because canonical() doesn't undo Shift+6 → '^'.
+        """
+        from Quartz import (
+            CFMachPortCreateRunLoopSource,
+            CFRunLoopAddSource,
+            CFRunLoopGetCurrent,
+            CFRunLoopRun,
+            CGEventGetFlags,
+            CGEventGetIntegerValueField,
+            CGEventMaskBit,
+            CGEventTapCreate,
+            CGEventTapEnable,
+            kCFRunLoopCommonModes,
+            kCGEventKeyDown,
+            kCGEventFlagMaskCommand,
+            kCGEventFlagMaskShift,
+            kCGHeadInsertEventTap,
+            kCGKeyboardEventKeycode,
+            kCGSessionEventTap,
         )
 
-        # Start listener in daemon thread
-        keyboard_listener.start()
-        logger.info("Global hotkey registered: Cmd+Shift+6 for Region Capture")
+        VK_ANSI_6 = 22
+        required_flags = kCGEventFlagMaskCommand | kCGEventFlagMaskShift
+
+        def tap_callback(proxy, event_type, event, refcon):
+            keycode = CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode)
+            if keycode == VK_ANSI_6:
+                flags = CGEventGetFlags(event)
+                if (flags & required_flags) == required_flags:
+                    logger.info("Hotkey Cmd+Shift+6 pressed - triggering region capture")
+                    self.capture_region_now()
+            return event
+
+        tap = CGEventTapCreate(
+            kCGSessionEventTap,
+            kCGHeadInsertEventTap,
+            0,
+            CGEventMaskBit(kCGEventKeyDown),
+            tap_callback,
+            None,
+        )
+
+        if tap is None:
+            logger.error(
+                "CGEventTapCreate failed — grant Accessibility permission to "
+                "the Python binary running this process (sys.executable: %s, "
+                "resolved: %s) in System Settings > Privacy & Security > Accessibility.",
+                sys.executable,
+                Path(sys.executable).resolve(),
+            )
+            return
+
+        CGEventTapEnable(tap, True)
+        source = CFMachPortCreateRunLoopSource(None, tap, 0)
+
+        def run_tap():
+            loop = CFRunLoopGetCurrent()
+            CFRunLoopAddSource(loop, source, kCFRunLoopCommonModes)
+            CFRunLoopRun()
+
+        threading.Thread(target=run_tap, daemon=True).start()
+        logger.info("Global hotkey registered: Cmd+Shift+6 for Region Capture (CGEventTap)")
 
     def quit_app(self, _):
         """Quit the application - stop the service."""
