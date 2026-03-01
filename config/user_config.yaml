@@ -1,0 +1,26 @@
+capture:
+  capture_interval_seconds: 900
+  monitor_index: 1
+  retention_days: 1095
+
+annotation:
+  annotation_mode: manual
+  annotation_interval_hours: 4
+  screenshot_analysis_batch_size: 4
+  screenshot_analysis_prompt: >
+    What is shown in this screenshot? Describe the work activity briefly.
+  rewrite_screenshot_analysis_format_summary: false
+  rewrite_screenshot_analysis_prompt: ''
+
+digest:
+  interval_seconds: 3600
+
+timeline:
+  bucket_minutes: 30
+  exclude_keywords: []
+
+notifications:
+  enabled: true
+  notify_before_capture: true
+  pre_capture_warning_seconds: 5
+  pre_capture_sound: false

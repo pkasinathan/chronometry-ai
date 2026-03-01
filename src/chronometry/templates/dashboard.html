@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chronometry</title>
+    
+    <!-- Pico CSS (same base as sentinel-ui) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <!-- Vue.js -->
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.8/dist/vue.global.prod.js"></script>
+    <!-- Marked.js -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.0.0/marked.min.js"></script>
+    
+    <style>
+        /* ── Global Font Scale (sentinel-ui convention) ── */
+        :root {
+            --pico-font-size: 87.5%;
+            --bg-body: #11191f;
+            --bg-card: #1a2028;
+            --bg-input: #0d1117;
+            --bg-hover: rgba(255, 255, 255, 0.05);
+            --bg-subtle: rgba(255, 255, 255, 0.02);
+            --border-color: #2d3748;
+            --border-subtle: rgba(255, 255, 255, 0.06);
+            --text-primary: #c2c7d0;
+            --text-heading: #e2e8f0;
+            --text-muted: #7b8495;
+            --text-dim: rgba(255, 255, 255, 0.45);
+            --accent-bg: #0172ad;
+            --accent-text: #01aaff;
+            --accent-hover: #017fc0;
+            --accent-interactive: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.2);
+            --pulse-green: #4ade80;
+            --pulse-amber: #fbbf24;
+            --pulse-red: #f87171;
+            --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.3);
+            --header-gradient-start: #1a1a2e;
+            --header-gradient-end: transparent;
+        }
+
+        [data-theme="light"] {
+            --bg-body: #ffffff;
+            --bg-card: #f8fafc;
+            --bg-input: #f1f5f9;
+            --bg-hover: rgba(0, 0, 0, 0.04);
+            --bg-subtle: rgba(0, 0, 0, 0.02);
+            --border-color: #e2e8f0;
+            --border-subtle: rgba(0, 0, 0, 0.06);
+            --text-primary: #373c44;
+            --text-heading: #1a202c;
+            --text-muted: #646b79;
+            --text-dim: rgba(0, 0, 0, 0.45);
+            --accent-bg: #0172ad;
+            --accent-text: #015887;
+            --accent-hover: #015887;
+            --accent-interactive: #3b82f6;
+            --accent-glow: rgba(59, 130, 246, 0.15);
+            --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.08);
+            --header-gradient-start: #e2e8f0;
+            --header-gradient-end: transparent;
+        }
+        
+        body {
+            background: var(--bg-body);
+            color: var(--text-primary);
+            padding-bottom: 2rem;
+        }
+
+        /* ── Header / Nav ── */
+        .app-header {
+            background: linear-gradient(135deg, var(--header-gradient-start), var(--header-gradient-end));
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.75rem 1.5rem;
+            margin-bottom: 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .app-header-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .app-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            color: var(--text-heading);
+            font-weight: 700;
+            font-size: 1.1rem;
+            white-space: nowrap;
+        }
+
+        .app-logo-icon {
+            font-size: 1.4rem;
+        }
+
+        .app-subtitle {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-left: -0.25rem;
+        }
+
+        .app-nav {
+            display: flex;
+            gap: 0.25rem;
+            margin-left: 1.5rem;
+            flex: 1;
+        }
+
+        .app-nav a {
+            padding: 0.4rem 0.75rem;
+            font-size: 0.85rem;
+            text-decoration: none;
+            color: var(--text-muted);
+            border-radius: 6px;
+            transition: color 0.15s, background 0.15s;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .app-nav a:hover {
+            color: var(--text-heading);
+            background: var(--bg-hover);
+        }
+
+        .app-nav a.active {
+            color: var(--accent-text);
+            font-weight: 700;
+            text-decoration: underline;
+            text-underline-offset: 4px;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .pulse-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            vertical-align: middle;
+        }
+
+        .pulse-active {
+            background: var(--pulse-green);
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+
+        .pulse-offline { background: var(--pulse-red); }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); }
+            50% { box-shadow: 0 0 0 6px rgba(74, 222, 128, 0); }
+        }
+
+        .theme-toggle {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.1rem;
+            padding: 4px;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+            color: inherit;
+            width: auto;
+        }
+
+        .theme-toggle:hover { opacity: 1; }
+
+        .btn-sm {
+            padding: 0.3rem 0.75rem;
+            font-size: 0.8rem;
+            margin: 0;
+        }
+
+        /* ── Container ── */
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+
+        /* ── Stats Grid ── */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .stat-card {
+            text-align: center;
+            padding: 0.75rem 0.5rem;
+            margin-bottom: 0;
+        }
+        
+        .stat-value {
+            font-size: 1.6rem;
+            font-weight: 700;
+            line-height: 1.2;
+            color: var(--accent-text);
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            opacity: 0.7;
+            margin-top: 0.25rem;
+        }
+
+        /* ── Section Cards ── */
+        .section-card {
+            margin-bottom: 1.5rem;
+        }
+
+        .section-card > header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .section-card > header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            color: var(--text-heading);
+        }
+        
+        .section-actions {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        /* ── Date picker ── */
+        .date-picker {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .date-picker input[type="date"] {
+            padding: 0.3rem 0.5rem;
+            font-size: 0.82rem;
+            margin: 0;
+            width: auto;
+        }
+
+        /* ── Activity / Timeline Items ── */
+        .activity-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+        
+        .activity-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.65rem 1rem;
+            border-left: 4px solid var(--border-color);
+            border-radius: 0 6px 6px 0;
+            background: var(--bg-subtle);
+            transition: background 0.15s ease;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+        }
+        
+        .activity-item:hover {
+            background: var(--bg-hover);
+        }
+        
+        .activity-icon {
+            font-size: 1.1rem;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .activity-body {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .activity-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 2px;
+            color: var(--text-heading);
+        }
+        
+        .activity-summary {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+        
+        .activity-time {
+            flex-shrink: 0;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            font-family: 'Courier New', Courier, monospace;
+            white-space: nowrap;
+            margin-top: 2px;
+        }
+
+        /* ── Expanded Activity Details ── */
+        .activity-details {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            padding: 1rem;
+            margin-top: -0.4rem;
+            margin-bottom: 0.4rem;
+            animation: slideDown 0.2s ease-out;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-4px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        .activity-details-header {
+            display: flex;
+            gap: 1.5rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border-subtle);
+            margin-bottom: 0.75rem;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            flex-wrap: wrap;
+        }
+
+        .activity-details-header strong {
+            color: var(--text-dim);
+            font-weight: 600;
+        }
+        
+        .activity-frames-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 0.75rem;
+        }
+        
+        .activity-frame-image {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .activity-frame-image:hover {
+            border-color: var(--accent-interactive);
+            transform: scale(1.02);
+        }
+
+        .loading-inline {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            padding: 0.5rem 0;
+        }
+
+        /* ── Digest ── */
+        .digest-overall {
+            background: var(--bg-subtle);
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .digest-overall-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            opacity: 0.7;
+            margin-bottom: 0.75rem;
+        }
+        
+        .digest-overall-text {
+            font-size: 0.9rem;
+            line-height: 1.7;
+            color: var(--text-primary);
+        }
+
+        .digest-category-card {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.75rem 1rem;
+            border-left: 4px solid var(--accent-interactive);
+            border-radius: 0 6px 6px 0;
+            background: var(--bg-subtle);
+            margin-bottom: 0.5rem;
+            transition: background 0.15s;
+        }
+        
+        .digest-category-card:hover {
+            background: var(--bg-hover);
+        }
+
+        .digest-category-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 2px; }
+
+        .digest-category-body { flex: 1; min-width: 0; }
+        
+        .digest-category-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.4rem;
+        }
+        
+        .digest-category-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-heading);
+        }
+        
+        .digest-category-stats {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: 'Courier New', Courier, monospace;
+        }
+        
+        .digest-category-summary {
+            font-size: 0.82rem;
+            line-height: 1.6;
+            color: var(--text-muted);
+        }
+
+        /* ── Charts ── */
+        .chart-container {
+            position: relative;
+            height: 280px;
+            margin: 1rem 0;
+        }
+
+        /* ── Search ── */
+        .search-bar {
+            display: flex;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+            align-items: center;
+        }
+
+        .search-bar input { flex: 1; margin: 0; }
+        .search-bar select { width: auto; min-width: 160px; margin: 0; }
+
+        /* ── Settings ── */
+        .settings-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .settings-section > header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding-bottom: 0.5rem;
+            margin-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .settings-section > header h4 {
+            margin: 0;
+            font-size: 1rem;
+            color: var(--text-heading);
+        }
+
+        .settings-section > header .icon { font-size: 1.2rem; }
+
+        .settings-field {
+            margin-bottom: 1rem;
+        }
+
+        .settings-field label {
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            color: var(--text-muted);
+            margin-bottom: 0.3rem;
+            display: block;
+        }
+        
+        .settings-field input,
+        .settings-field select,
+        .settings-field textarea {
+            max-width: 400px;
+        }
+
+        .settings-field textarea {
+            max-width: 100%;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.82rem;
+        }
+        
+        .settings-hint {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            margin-top: 0.25rem;
+            line-height: 1.5;
+        }
+        
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .checkbox-label input { width: auto; margin: 0; }
+
+        /* ── Empty / Loading States ── */
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            opacity: 0.5;
+        }
+
+        .empty-state-icon {
+            font-size: 2.5rem;
+            display: block;
+            margin-bottom: 0.75rem;
+        }
+
+        .loading-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-muted);
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--accent-interactive);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 0.75rem;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Modal ── */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 1rem;
+        }
+
+        .modal-content {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            max-width: 900px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+        }
+
+        /* ── Markdown Content ── */
+        .md-content { line-height: 1.6; word-wrap: break-word; }
+        .md-content p { margin: 0.4em 0; }
+        .md-content p:last-child { margin-bottom: 0; }
+        .md-content strong { font-weight: 700; color: var(--text-heading); }
+        .md-content h1, .md-content h2, .md-content h3, .md-content h4 {
+            color: var(--accent-text);
+            margin-top: 1em;
+            margin-bottom: 0.4em;
+            line-height: 1.3;
+        }
+        .md-content h1 { font-size: 1.3rem; }
+        .md-content h2 { font-size: 1.15rem; }
+        .md-content h3 { font-size: 1rem; }
+        .md-content ul, .md-content ol { padding-left: 1.5em; margin: 0.4em 0; }
+        .md-content li { margin: 0.2em 0; }
+        .md-content code {
+            background: rgba(255,255,255,0.06);
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 0.88em;
+        }
+        .md-content pre { margin: 0.5em 0; max-height: 400px; overflow: auto; }
+        .md-content pre code { background: none; padding: 0; }
+        .md-content blockquote {
+            border-left: 3px solid rgba(255,255,255,0.15);
+            padding: 0.4em 1em;
+            margin: 0.4em 0;
+            opacity: 0.85;
+        }
+        .md-content a { color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px; }
+
+        [data-theme="light"] .md-content code { background: rgba(0,0,0,0.06); }
+        [data-theme="light"] .md-content blockquote { border-left-color: rgba(0,0,0,0.15); }
+
+        /* ── Scrollbar ── */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+        [data-theme="light"] ::-webkit-scrollbar-thumb { background: #d1d5db; }
+
+        /* ── Responsive ── */
+        @media (max-width: 768px) {
+            .app-nav { display: none; }
+            .app-header-inner { flex-wrap: wrap; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .main-container { padding: 1rem; }
+            .search-bar { flex-direction: column; }
+            .search-bar select { width: 100%; min-width: unset; }
+            .section-card > header { flex-direction: column; align-items: flex-start; }
+        }
+
+        /* ── Mobile Nav (bottom bar) ── */
+        .mobile-nav {
+            display: none;
+            position: fixed;
+            bottom: 0; left: 0; right: 0;
+            background: var(--bg-card);
+            border-top: 1px solid var(--border-color);
+            z-index: 100;
+            padding: 0.4rem 0;
+        }
+
+        .mobile-nav-inner {
+            display: flex;
+            justify-content: space-around;
+        }
+
+        .mobile-nav a {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-decoration: none;
+            padding: 0.25rem 0.5rem;
+            cursor: pointer;
+        }
+
+        .mobile-nav a.active { color: var(--accent-text); }
+        .mobile-nav a .nav-icon { font-size: 1.2rem; margin-bottom: 2px; }
+
+        @media (max-width: 768px) {
+            .mobile-nav { display: block; }
+            body { padding-bottom: 4rem; }
+        }
+
+        /* ── Dates list ── */
+        .dates-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        .date-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.15s;
+            font-size: 0.88rem;
+        }
+
+        .date-item:hover { background: var(--bg-hover); }
+
+        .date-item-icon { opacity: 0.5; }
+        .date-item-count {
+            margin-left: auto;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: 'Courier New', Courier, monospace;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="app-header-inner">
+                <div class="app-logo">
+                    <span class="app-logo-icon">⏱️</span>
+                    <span>Chronometry</span>
+                    </div>
+                <span class="app-subtitle">[[ formattedSelectedDate ]]</span>
+
+                <nav class="app-nav">
+                    <a :class="{ active: activeTab === 'dashboard' }" @click="switchTab('dashboard')">Dashboard</a>
+                    <a :class="{ active: activeTab === 'timeline' }" @click="switchTab('timeline')">Timeline</a>
+                    <a :class="{ active: activeTab === 'analytics' }" @click="switchTab('analytics')">Analytics</a>
+                    <a :class="{ active: activeTab === 'search' }" @click="switchTab('search')">Search</a>
+                    <a :class="{ active: activeTab === 'settings' }" @click="switchTab('settings')">Settings</a>
+                </nav>
+                
+                <div class="header-actions">
+                    <span class="pulse-dot" :class="isLive ? 'pulse-active' : 'pulse-offline'"
+                          :title="isLive ? 'Connected' : 'Offline'"></span>
+                    <button class="theme-toggle" @click="toggleTheme"
+                            :title="isDarkTheme ? 'Light mode' : 'Dark mode'">
+                        [[ isDarkTheme ? '☀️' : '🌙' ]]
+                    </button>
+                    <button class="btn-sm outline" @click="refresh">Refresh</button>
+                    </div>
+                </div>
+        </header>
+
+        <!-- Mobile Nav -->
+        <nav class="mobile-nav">
+            <div class="mobile-nav-inner">
+                <a :class="{ active: activeTab === 'dashboard' }" @click="switchTab('dashboard')">
+                    <span class="nav-icon">📊</span>Home
+                </a>
+                <a :class="{ active: activeTab === 'timeline' }" @click="switchTab('timeline')">
+                    <span class="nav-icon">📅</span>Timeline
+                </a>
+                <a :class="{ active: activeTab === 'analytics' }" @click="switchTab('analytics')">
+                    <span class="nav-icon">📈</span>Analytics
+                </a>
+                <a :class="{ active: activeTab === 'search' }" @click="switchTab('search')">
+                    <span class="nav-icon">🔍</span>Search
+                </a>
+                <a :class="{ active: activeTab === 'settings' }" @click="switchTab('settings')">
+                    <span class="nav-icon">⚙️</span>Settings
+                </a>
+            </div>
+        </nav>
+        
+        <!-- Main Content -->
+        <div class="main-container">
+
+            <!-- ═══ Dashboard Tab ═══ -->
+            <div v-show="activeTab === 'dashboard'">
+                <div class="stats-grid">
+                    <article class="stat-card">
+                        <div class="stat-value">[[ stats.total_days ]]</div>
+                        <div class="stat-label">Days Tracked</div>
+                    </article>
+                    <article class="stat-card">
+                        <div class="stat-value">[[ stats.total_frames ]]</div>
+                        <div class="stat-label">Frames Captured</div>
+                    </article>
+                    <article class="stat-card">
+                        <div class="stat-value">[[ stats.total_activities ]]</div>
+                        <div class="stat-label">Activities</div>
+                    </article>
+                    <article class="stat-card">
+                        <div class="stat-value">[[ stats.average_focus ]]%</div>
+                            <div class="stat-label">Focus Score</div>
+                    </article>
+                </div>
+                
+                <article class="section-card">
+                    <header>
+                        <h3>Digest</h3>
+                        <div class="section-actions">
+                            <div class="date-picker">
+                                <input type="date" v-model="digestDate" @change="loadDigest">
+                                <button class="btn-sm outline" @click="previousDigestDay">‹</button>
+                                <button class="btn-sm outline" @click="nextDigestDay">›</button>
+                            </div>
+                            <button class="btn-sm" @click="runAnnotation" :disabled="annotationRunning">
+                                [[ annotationRunning ? 'Running…' : 'Annotate' ]]
+                            </button>
+                            <button class="btn-sm outline" @click="regenerateDigest">Regenerate</button>
+                            <button class="btn-sm outline secondary" @click="switchTab('timeline')">View Timeline</button>
+                        </div>
+                    </header>
+
+                    <div class="loading-state" v-if="loadingDigest">
+                        <div class="spinner"></div>
+                        <div>Generating digest…</div>
+                    </div>
+                    
+                    <div v-else-if="digest && !digest.error">
+                        <div class="digest-overall">
+                            <div class="digest-overall-title">Summary</div>
+                            <div class="digest-overall-text md-content" v-html="renderMarkdown(digest.overall_summary)"></div>
+                        </div>
+                        
+                        <div v-for="(data, category) in digest.category_summaries" :key="category"
+                                     class="digest-category-card"
+                             :style="{ borderLeftColor: data.color || 'var(--accent-interactive)' }">
+                                        <span class="digest-category-icon">[[ data.icon ]]</span>
+                            <div class="digest-category-body">
+                                <div class="digest-category-header">
+                                        <span class="digest-category-name">[[ category ]]</span>
+                                        <span class="digest-category-stats">
+                                            [[ data.count ]] activities · [[ formatDuration(data.duration_minutes) ]]
+                                        </span>
+                                    </div>
+                                <div class="digest-category-summary md-content" v-html="renderMarkdown(data.summary)"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="empty-state" v-else>
+                        <span class="empty-state-icon">📭</span>
+                        <p>[[ digest?.error || 'No activities recorded yet today' ]]</p>
+                    </div>
+                </article>
+            </div>
+            
+            <!-- ═══ Timeline Tab ═══ -->
+            <div v-show="activeTab === 'timeline'">
+                <article class="section-card">
+                    <header>
+                        <h3>Activity Timeline</h3>
+                        <div class="date-picker">
+                            <input type="date" v-model="selectedDate" @change="loadTimelineByDate">
+                            <button class="btn-sm outline" @click="previousDay">‹</button>
+                            <button class="btn-sm outline" @click="nextDay">›</button>
+                        </div>
+                    </header>
+
+                    <div class="loading-state" v-if="loadingTimeline">
+                        <div class="spinner"></div>
+                        <div>Loading timeline…</div>
+                    </div>
+                    
+                    <div v-else-if="timelineActivities.length > 0">
+                        <div class="activity-list">
+                            <div v-for="(activity, index) in timelineActivities" :key="activity.start_time">
+                                <div class="activity-item"
+                                     :style="{ borderLeftColor: activity.color || 'var(--accent-interactive)' }"
+                                     @click="toggleActivityExpand(index)">
+                                    <span class="activity-icon">[[ activity.icon ]]</span>
+                                    <div class="activity-body">
+                                        <div class="activity-title">[[ activity.category ]]</div>
+                                        <div class="activity-summary md-content" v-html="renderMarkdown(activity.summary)"></div>
+                                    </div>
+                                    <span class="activity-time">[[ formatTime(activity.start_time) ]] · [[ formatDuration(activity.duration_minutes) ]]</span>
+                                </div>
+                                
+                                <div v-if="expandedActivity === index" class="activity-details">
+                                    <div class="activity-details-header">
+                                        <span><strong>Category:</strong> [[ activity.category ]]</span>
+                                        <span><strong>Date:</strong> [[ formatDateTime(activity.start_time) ]]</span>
+                                        <span><strong>Duration:</strong> [[ formatDuration(activity.duration_minutes) ]]</span>
+                                    </div>
+                                    <div v-if="activityFrames.length > 0">
+                                        <div class="activity-frames-grid">
+                                            <img v-for="frame in activityFrames" :key="frame.timestamp"
+                                                 :src="getFrameImageUrl(frame)"
+                                                 :alt="frame.timestamp"
+                                                 class="activity-frame-image"
+                                                 @click="viewFrameFullSize(frame)">
+                                        </div>
+                                    </div>
+                                    <div v-else-if="loadingFrames" class="loading-inline">
+                                        <div class="spinner" style="width:18px;height:18px;margin:0;border-width:2px;"></div>
+                                        Loading screenshots…
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="empty-state" v-else>
+                        <span class="empty-state-icon">📅</span>
+                        <p>No activities found for this date</p>
+                    </div>
+                </article>
+            </div>
+            
+            <!-- ═══ Analytics Tab ═══ -->
+            <div v-show="activeTab === 'analytics'">
+                <article class="section-card">
+                    <header>
+                        <h3>Productivity Analytics</h3>
+                        <select v-model="analyticsDays" @change="loadAnalytics" style="width:auto;min-width:140px;margin:0;">
+                            <option value="7">Last 7 days</option>
+                            <option value="14">Last 14 days</option>
+                            <option value="30">Last 30 days</option>
+                        </select>
+                    </header>
+                    <div class="chart-container"><canvas id="focusChart"></canvas></div>
+                </article>
+
+                <article class="section-card">
+                    <header><h3>Token Usage</h3></header>
+                    <div class="chart-container"><canvas id="tokenChart"></canvas></div>
+                </article>
+
+                <article class="section-card">
+                    <header><h3>Category Breakdown</h3></header>
+                    <div class="chart-container"><canvas id="categoryChart"></canvas></div>
+                </article>
+
+                <article class="section-card">
+                    <header><h3>Hourly Activity</h3></header>
+                    <div class="chart-container"><canvas id="hourlyChart"></canvas></div>
+                </article>
+                </div>
+                
+            <!-- ═══ Search Tab ═══ -->
+            <div v-show="activeTab === 'search'">
+                <article class="section-card">
+                    <header><h3>Search Activities</h3></header>
+                    
+                    <div class="search-bar">
+                        <input type="search" v-model="searchQuery" @input="debounceSearch"
+                               placeholder="Search activities…">
+                        <select v-model="searchCategory" @change="performSearch">
+                            <option value="">All Categories</option>
+                            <option value="code">Code</option>
+                            <option value="meeting">Meeting</option>
+                            <option value="documentation">Documentation</option>
+                            <option value="email">Email</option>
+                            <option value="browsing">Browsing</option>
+                        </select>
+                        <button class="btn-sm" @click="performSearch">Search</button>
+                    </div>
+                    
+                    <div class="loading-state" v-if="searchLoading">
+                        <div class="spinner"></div>
+                        <div>Searching…</div>
+                    </div>
+                    
+                    <div v-else-if="searchResults.length > 0">
+                        <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:0.75rem;">
+                            Found [[ searchResults.length ]] result(s)
+                        </p>
+                        <div class="activity-list">
+                            <div v-for="result in searchResults" :key="result.start_time"
+                                 class="activity-item"
+                                 :style="{ borderLeftColor: result.color || 'var(--accent-interactive)' }">
+                                <span class="activity-icon">[[ result.icon ]]</span>
+                                <div class="activity-body">
+                                    <div class="activity-title">[[ result.category ]] — [[ result.date ]]</div>
+                                    <div class="activity-summary md-content" v-html="renderMarkdown(result.summary)"></div>
+                                </div>
+                                <span class="activity-time">[[ formatDuration(result.duration_minutes) ]]</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="empty-state" v-else-if="searchQuery">
+                        <span class="empty-state-icon">🔍</span>
+                        <p>No results for "[[ searchQuery ]]"</p>
+                    </div>
+                </article>
+            </div>
+            
+            <!-- ═══ Settings Tab ═══ -->
+            <div v-show="activeTab === 'settings'">
+                <article class="section-card">
+                    <header>
+                        <h3>Configuration</h3>
+                        <button class="btn-sm" @click="saveSettings">Save Changes</button>
+                    </header>
+
+                    <!-- Capture -->
+                    <div class="settings-section">
+                        <header><span class="icon">📸</span><h4>Capture</h4></header>
+                                <div class="settings-field">
+                            <label>Capture Interval (seconds)</label>
+                            <input type="number" v-model.number="settings.capture.capture_interval_seconds">
+                                    <div class="settings-hint">
+                                Every [[ settings.capture.capture_interval_seconds ]]s ([[ Math.round(settings.capture.capture_interval_seconds / 60) ]] min)
+                                    </div>
+                                </div>
+                                <div class="settings-field">
+                            <label>Monitor Index</label>
+                            <input type="number" v-model.number="settings.capture.monitor_index">
+                            <div class="settings-hint">0 = all monitors, 1+ = specific</div>
+                                    </div>
+                                <div class="settings-field">
+                            <label>Retention Days</label>
+                            <input type="number" v-model.number="settings.capture.retention_days">
+                            </div>
+                        </div>
+                        
+                    <!-- Annotation -->
+                    <div class="settings-section">
+                        <header><span class="icon">🤖</span><h4>Annotation</h4></header>
+                                <div class="settings-field">
+                            <label>Backend</label>
+                            <select v-model="settings.annotation.backend">
+                                <option value="local">Ollama (local)</option>
+                                <option value="openai_compatible">OpenAI-compatible</option>
+                                    </select>
+                                    </div>
+                                <div class="settings-field">
+                            <label>Mode</label>
+                            <select v-model="settings.annotation.annotation_mode">
+                                <option value="auto">Auto (scheduled)</option>
+                                <option value="manual">Manual (on demand)</option>
+                                    </select>
+                                    </div>
+                                <div class="settings-field" v-if="settings.annotation.annotation_mode === 'auto'">
+                            <label>Interval (hours)</label>
+                            <input type="number" v-model.number="settings.annotation.annotation_interval_hours" min="1" max="24">
+                                    </div>
+                                <div class="settings-field">
+                            <label>Batch Size</label>
+                            <input type="number" v-model.number="settings.annotation.screenshot_analysis_batch_size" min="1" max="10">
+                                    </div>
+                                <div class="settings-field">
+                            <label>Analysis Prompt</label>
+                            <textarea v-model="settings.annotation.screenshot_analysis_prompt" rows="6"></textarea>
+                                    </div>
+                        <div class="settings-field" style="padding-top:0.75rem;border-top:1px solid var(--border-subtle);">
+                            <label class="checkbox-label">
+                                <input type="checkbox" v-model="settings.annotation.rewrite_screenshot_analysis_format_summary">
+                                Post-process with LLM
+                                    </label>
+                            <div class="settings-hint">Clean up summaries for readability (extra tokens)</div>
+                                    </div>
+                        <div class="settings-field" v-if="settings.annotation.rewrite_screenshot_analysis_format_summary" style="margin-left:1.5rem;">
+                            <label>Post-Processing Prompt</label>
+                            <textarea v-model="settings.annotation.rewrite_screenshot_analysis_prompt" rows="6"></textarea>
+                            </div>
+                        </div>
+                        
+                    <!-- Timeline -->
+                    <div class="settings-section">
+                        <header><span class="icon">📅</span><h4>Timeline</h4></header>
+                                <div class="settings-field">
+                            <label>Bucket Minutes</label>
+                            <input type="number" v-model.number="settings.timeline.bucket_minutes">
+                                    </div>
+                                <div class="settings-field">
+                            <label>Exclude Keywords</label>
+                            <textarea v-model="settings.timeline.exclude_keywords_text" rows="2"
+                                      placeholder="youtube, reddit, twitter" style="font-family:inherit;"></textarea>
+                            <div class="settings-hint">Comma-separated, case-insensitive</div>
+                            </div>
+                        </div>
+                        
+                    <!-- Notifications -->
+                    <div class="settings-section">
+                        <header><span class="icon">🔔</span><h4>Notifications</h4></header>
+                                <div class="settings-field">
+                            <label class="checkbox-label">
+                                <input type="checkbox" v-model="settings.notifications.enabled">
+                                Enable Desktop Notifications
+                                    </label>
+                                    </div>
+                                <div class="settings-field">
+                            <label class="checkbox-label">
+                                <input type="checkbox" v-model="settings.notifications.notify_before_capture">
+                                Notify Before Capture
+                                    </label>
+                                    </div>
+                                <div class="settings-field">
+                            <label>Warning Time (seconds)</label>
+                            <input type="number" v-model.number="settings.notifications.pre_capture_warning_seconds" min="0" max="30">
+                                    </div>
+                                <div class="settings-field">
+                            <label class="checkbox-label">
+                                <input type="checkbox" v-model="settings.notifications.pre_capture_sound">
+                                Play Sound on Warning
+                                    </label>
+                            </div>
+                        </div>
+                        
+                    <!-- Digest -->
+                    <div class="settings-section">
+                        <header><span class="icon">📋</span><h4>Digest</h4></header>
+                                <div class="settings-field">
+                            <label>Backend</label>
+                            <select v-model="settings.digest.backend">
+                                <option value="local">Ollama (local)</option>
+                                <option value="openai_compatible">OpenAI-compatible</option>
+                                    </select>
+                                    </div>
+                                <div class="settings-field">
+                            <label>Generation Interval (seconds)</label>
+                            <input type="number" v-model.number="settings.digest.interval_seconds">
+                            <div class="settings-hint">Every [[ Math.round(settings.digest.interval_seconds / 60) ]] min</div>
+                                    </div>
+                                </div>
+                </article>
+
+                <!-- Available Dates -->
+                <article class="section-card">
+                    <header><h3>Available Dates</h3></header>
+                    <div class="dates-list">
+                        <div v-for="dateInfo in availableDates" :key="dateInfo.date"
+                             class="date-item" @click="viewDate(dateInfo.date)">
+                            <span class="date-item-icon">📅</span>
+                            <span>[[ dateInfo.date ]]</span>
+                            <span class="date-item-count">[[ dateInfo.frame_count ]] frames</span>
+                                    </div>
+                                </div>
+                </article>
+                </div>
+                
+                    </div>
+    </div>
+    
+    <script>
+        const { createApp } = Vue;
+        
+        createApp({
+            delimiters: ['[[', ']]'],
+            data() {
+                const validTabs = ['dashboard', 'timeline', 'analytics', 'search', 'settings'];
+                const pathTab = window.location.pathname.replace(/^\//, '') || 'dashboard';
+                const initialTab = validTabs.includes(pathTab) ? pathTab : 'dashboard';
+                return {
+                    activeTab: initialTab,
+                    isDarkTheme: localStorage.getItem('chronometry-theme') !== 'light',
+                    isLive: false,
+                    loading: false,
+                    loadingTimeline: false,
+                    searchLoading: false,
+                    selectedDate: (() => {
+                        const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                    })(),
+                    digestDate: (() => {
+                        const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                    })(),
+                    analyticsDays: 7,
+                    stats: { total_days: 0, total_frames: 0, total_activities: 0, average_focus: 0 },
+                    todayActivities: [],
+                    timelineActivities: [],
+                    digest: null,
+                    loadingDigest: false,
+                    annotationRunning: false,
+                    searchQuery: '',
+                    searchCategory: '',
+                    searchResults: [],
+                    settings: {
+                        capture: { capture_interval_seconds: 900, monitor_index: 1, retention_days: 1095 },
+                        annotation: { screenshot_analysis_batch_size: 4, rewrite_screenshot_analysis_format_summary: false, rewrite_screenshot_analysis_prompt: '', screenshot_analysis_prompt: '' },
+                        timeline: { bucket_minutes: 30, exclude_keywords_text: '' },
+                        digest: { interval_seconds: 3600 },
+                        notifications: { enabled: true, notify_before_capture: true, pre_capture_warning_seconds: 5, pre_capture_sound: false }
+                    },
+                    availableDates: [],
+                    socket: null,
+                    focusChart: null, categoryChart: null, hourlyChart: null, tokenChart: null,
+                    searchTimeout: null,
+                    expandedActivity: null,
+                    activityFrames: [],
+                    loadingFrames: false
+                };
+            },
+            mounted() {
+                if (!this.isDarkTheme) {
+                    document.documentElement.setAttribute('data-theme', 'light');
+                }
+                this.init();
+                window.addEventListener('popstate', () => {
+                    const path = window.location.pathname.replace(/^\//, '') || 'dashboard';
+                    const valid = ['dashboard', 'timeline', 'analytics', 'search', 'settings'];
+                    this.activeTab = valid.includes(path) ? path : 'dashboard';
+                });
+                setInterval(() => this.refresh(), 60000);
+            },
+            methods: {
+                toggleTheme() {
+                    this.isDarkTheme = !this.isDarkTheme;
+                    document.documentElement.setAttribute('data-theme', this.isDarkTheme ? 'dark' : 'light');
+                    localStorage.setItem('chronometry-theme', this.isDarkTheme ? 'dark' : 'light');
+                    if (this.activeTab === 'analytics') this.$nextTick(() => this.loadAnalytics());
+                },
+                themeColor(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); },
+                switchTab(tab) {
+                    this.activeTab = tab;
+                    const url = tab === 'dashboard' ? '/' : `/${tab}`;
+                    if (window.location.pathname !== url) history.pushState({ tab }, '', url);
+                },
+                async init() {
+                    await this.loadStats();
+                    await this.loadAvailableDates();
+                    await this.loadDigest();
+                    await this.loadSettings();
+                    this.initWebSocket();
+                },
+                initWebSocket() {
+                    this.socket = io();
+                    this.socket.on('connect', () => { this.isLive = true; });
+                    this.socket.on('disconnect', () => { this.isLive = false; });
+                    this.socket.on('new_activity', () => { this.refresh(); });
+                },
+                async loadStats() {
+                    try { const r = await fetch('/api/stats'); this.stats = await r.json(); } catch(e) { console.error(e); }
+                },
+                async loadDigest(force = false) {
+                    this.loadingDigest = true;
+                    try {
+                        const url = force ? `/api/digest/${this.digestDate}?force=true` : `/api/digest/${this.digestDate}`;
+                        this.digest = await (await fetch(url)).json();
+                    } catch(e) { this.digest = { error: 'Failed to load digest' }; }
+                    finally { this.loadingDigest = false; }
+                },
+                async regenerateDigest() { await this.loadDigest(true); },
+                async runAnnotation() {
+                    this.annotationRunning = true;
+                    try {
+                        const r = await fetch('/api/annotate/run', { method: 'POST' });
+                        if (!r.ok) { alert('Failed to start'); this.annotationRunning = false; return; }
+                        const poll = setInterval(async () => {
+                            try {
+                                const tr = await fetch(`/api/timeline/${this.selectedDate}`);
+                                if (tr.ok) {
+                                    const d = await tr.json();
+                                    if (d.activities && d.activities.length !== this.timelineActivities.length) {
+                                        clearInterval(poll); this.annotationRunning = false;
+                                        await this.loadTimeline(); await this.loadDigest(); await this.loadStats();
+                                    }
+                                }
+                            } catch(e) {}
+                        }, 3000);
+                        setTimeout(() => { clearInterval(poll); this.annotationRunning = false; }, 600000);
+                    } catch(e) { this.annotationRunning = false; }
+                },
+                previousDigestDay() {
+                    const d = new Date(this.digestDate); d.setDate(d.getDate()-1);
+                    this.digestDate = d.toISOString().split('T')[0]; this.loadDigest();
+                },
+                nextDigestDay() {
+                    const d = new Date(this.digestDate); d.setDate(d.getDate()+1);
+                    if (d <= new Date()) { this.digestDate = d.toISOString().split('T')[0]; this.loadDigest(); }
+                },
+                async loadTimelineByDate() {
+                    this.loadingTimeline = true;
+                    try { this.timelineActivities = (await (await fetch(`/api/timeline/${this.selectedDate}`)).json()).activities || []; }
+                    catch(e) { console.error(e); }
+                    finally { this.loadingTimeline = false; }
+                },
+                async loadAnalytics() {
+                    try {
+                        const data = await (await fetch(`/api/analytics?days=${this.analyticsDays}`)).json();
+                        this.renderFocusChart(data.daily_stats);
+                        this.renderTokenChart(data.token_usage || []);
+                        this.renderCategoryChart(data.category_breakdown);
+                        this.renderHourlyChart(data.hourly_breakdown);
+                    } catch(e) { console.error(e); }
+                },
+                renderFocusChart(s) {
+                    const ctx = document.getElementById('focusChart'); if (!ctx) return;
+                    if (this.focusChart) this.focusChart.destroy();
+                    this.focusChart = new Chart(ctx, {
+                        type: 'line',
+                        data: { labels: s.map(d=>d.date), datasets: [{ label:'Focus %', data: s.map(d=>d.focus_percentage), borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,0.1)', tension:0.4 }] },
+                        options: { responsive:true, maintainAspectRatio:false, scales:{ y:{beginAtZero:true,max:100,grid:{color:this.themeColor('--border-color')},ticks:{color:this.themeColor('--text-muted')}}, x:{grid:{color:this.themeColor('--border-color')},ticks:{color:this.themeColor('--text-muted')}} }, plugins:{ legend:{labels:{color:this.themeColor('--text-primary')}} } }
+                    });
+                },
+                renderTokenChart(t) {
+                    const ctx = document.getElementById('tokenChart'); if (!ctx) return;
+                    if (this.tokenChart) this.tokenChart.destroy();
+                    this.tokenChart = new Chart(ctx, {
+                        type:'bar',
+                        data:{ labels:t.map(d=>d.date), datasets:[{label:'Digest',data:t.map(d=>d.digest_tokens),backgroundColor:'#3b82f6',stack:'s'},{label:'Annotation',data:t.map(d=>d.annotation_tokens),backgroundColor:'#6b7280',stack:'s'}] },
+                        options:{ responsive:true, maintainAspectRatio:false, scales:{ y:{beginAtZero:true,grid:{color:this.themeColor('--border-color')},ticks:{color:this.themeColor('--text-muted')},title:{display:true,text:'Tokens',color:this.themeColor('--text-muted')}}, x:{grid:{color:this.themeColor('--border-color')},ticks:{color:this.themeColor('--text-muted')}} }, plugins:{ legend:{labels:{color:this.themeColor('--text-primary')}}, tooltip:{callbacks:{footer:i=>'Total: '+i.reduce((s,x)=>s+x.parsed.y,0).toLocaleString()}} } }
+                    });
+                },
+                renderCategoryChart(c) {
+                    const ctx = document.getElementById('categoryChart'); if (!ctx) return;
+                    if (this.categoryChart) this.categoryChart.destroy();
+                    this.categoryChart = new Chart(ctx, {
+                        type:'doughnut',
+                        data:{ labels:c.map(x=>x.category), datasets:[{data:c.map(x=>x.minutes),backgroundColor:['#3b82f6','#60a5fa','#0172ad','#6b7280','#4b5563','#374151']}] },
+                        options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{position:'right',labels:{color:this.themeColor('--text-primary')}} } }
+                    });
+                },
+                renderHourlyChart(h) {
+                    const ctx = document.getElementById('hourlyChart'); if (!ctx) return;
+                    if (this.hourlyChart) this.hourlyChart.destroy();
+                    this.hourlyChart = new Chart(ctx, {
+                        type:'bar',
+                        data:{ labels:h.map(x=>`${x.hour}:00`), datasets:[{label:'Minutes',data:h.map(x=>x.minutes),backgroundColor:'#3b82f6'}] },
+                        options:{ responsive:true, maintainAspectRatio:false, scales:{ y:{beginAtZero:true,grid:{color:this.themeColor('--border-color')},ticks:{color:this.themeColor('--text-muted')}}, x:{grid:{color:this.themeColor('--border-color')},ticks:{color:this.themeColor('--text-muted')}} }, plugins:{ legend:{labels:{color:this.themeColor('--text-primary')}} } }
+                    });
+                },
+                async performSearch() {
+                    this.searchLoading = true;
+                    try {
+                        const p = new URLSearchParams({q:this.searchQuery,category:this.searchCategory,days:30});
+                        this.searchResults = (await (await fetch(`/api/search?${p}`)).json()).results || [];
+                    } catch(e) { console.error(e); }
+                    finally { this.searchLoading = false; }
+                },
+                debounceSearch() {
+                    clearTimeout(this.searchTimeout);
+                    this.searchTimeout = setTimeout(() => { if (this.searchQuery.length >= 3) this.performSearch(); }, 500);
+                },
+                async loadSettings() {
+                    try {
+                        const data = await (await fetch('/api/config')).json();
+                        this.settings = data;
+                        if (this.settings.timeline?.exclude_keywords)
+                            this.settings.timeline.exclude_keywords_text = this.settings.timeline.exclude_keywords.join(', ');
+                    } catch(e) { console.error(e); }
+                },
+                async saveSettings() {
+                    const errors = [];
+                    if (!this.settings.capture.capture_interval_seconds || this.settings.capture.capture_interval_seconds <= 0) errors.push('Capture interval must be positive');
+                    if (!this.settings.annotation.screenshot_analysis_prompt?.trim()) errors.push('Analysis prompt required');
+                    if (errors.length) { alert('Errors:\n' + errors.join('\n')); return; }
+                    const s = JSON.parse(JSON.stringify(this.settings));
+                    if (s.timeline.exclude_keywords_text !== undefined) {
+                        const t = s.timeline.exclude_keywords_text.trim();
+                        s.timeline.exclude_keywords = t ? t.split(',').map(k=>k.trim()).filter(k=>k) : [];
+                        delete s.timeline.exclude_keywords_text;
+                    }
+                    try {
+                        const r = await fetch('/api/config', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(s) });
+                        alert(r.ok ? 'Settings saved. Restart services to apply.' : 'Failed: ' + (await r.json()).message);
+                    } catch(e) { alert('Error: ' + e.message); }
+                },
+                async loadAvailableDates() {
+                    try { this.availableDates = (await (await fetch('/api/dates')).json()).dates || []; } catch(e) {}
+                },
+                async exportData() { window.open(`/api/export/csv?date=${this.selectedDate}`, '_blank'); },
+                previousDay() { const d=new Date(this.selectedDate); d.setDate(d.getDate()-1); this.selectedDate=d.toISOString().split('T')[0]; this.loadTimelineByDate(); },
+                nextDay() { const d=new Date(this.selectedDate); d.setDate(d.getDate()+1); this.selectedDate=d.toISOString().split('T')[0]; this.loadTimelineByDate(); },
+                viewDate(date) { this.selectedDate = date; this.switchTab('timeline'); this.loadTimelineByDate(); },
+                async refresh() {
+                    await this.loadStats(); await this.loadDigest();
+                    if (this.activeTab === 'analytics') await this.loadAnalytics();
+                },
+                formatDuration(m) { if (m<60) return `${m}m`; const h=Math.floor(m/60),r=m%60; return r>0?`${h}h ${r}m`:`${h}h`; },
+                formatTime(s) { return new Date(s).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}); },
+                formatDateTime(s) { return new Date(s).toLocaleString('en-US',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); },
+                async toggleActivityExpand(i) {
+                    if (this.expandedActivity === i) { this.expandedActivity = null; this.activityFrames = []; return; }
+                    this.expandedActivity = i; this.activityFrames = []; this.loadingFrames = true;
+                    const a = this.timelineActivities[i];
+                    try {
+                        const date = a.date || this.selectedDate;
+                        const data = await (await fetch(`/api/frames?date=${date}`)).json();
+                        const st = new Date(a.start_time), et = new Date(a.end_time);
+                        this.activityFrames = data.frames.filter(f => { const t=new Date(f.datetime); return t>=st && t<=et; });
+                    } catch(e) { console.error(e); }
+                    finally { this.loadingFrames = false; }
+                },
+                getFrameImageUrl(f) { return `/api/frames/${this.selectedDate}/${f.timestamp}/image`; },
+                viewFrameFullSize(f) { window.open(this.getFrameImageUrl(f), '_blank'); },
+                renderMarkdown(t) {
+                    if (!t) return '';
+                    try { return marked.parse(t, { breaks:true, gfm:true }); }
+                    catch(e) { return t; }
+                }
+            },
+            computed: {
+                formattedSelectedDate() {
+                    if (!this.selectedDate) return '';
+                    return new Date(this.selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+                }
+            },
+            watch: {
+                activeTab(t) {
+                    if (t === 'analytics') this.$nextTick(() => this.loadAnalytics());
+                    else if (t === 'timeline') this.loadTimelineByDate();
+                }
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>

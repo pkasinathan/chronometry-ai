@@ -1,0 +1,76 @@
+# Chronometry System Configuration
+# ==================================
+# Advanced settings for system-level configuration.
+# These settings are NOT exposed in the dashboard UI.
+
+server:
+  host: "127.0.0.1"
+  port: 8051
+  debug: false
+  secret_key: "change-me-in-production"
+
+paths:
+  root_dir: "~/.chronometry/data"
+  output_dir: "~/.chronometry/output"
+  logs_dir: "~/.chronometry/logs"
+
+annotation:
+  timeout_sec: 30
+  json_suffix: ".json"
+
+  # Local model settings (Ollama or OpenAI-compatible)
+  local_model:
+    # "ollama" or "openai_compatible" (vLLM, LM Studio, llama.cpp, etc.)
+    provider: "ollama"
+    base_url: "http://localhost:11434"
+    model_name: "qwen2.5vl:7b"
+    timeout_sec: 120
+
+digest:
+  enabled: true
+  model: "qwen2.5:7b"
+  temperature: 0.7
+  max_tokens_default: 500
+  max_tokens_category: 200
+  max_tokens_overall: 300
+  system_prompt: "You are an AI assistant that creates concise, professional summaries of work activities. Generate clear, well-structured summaries that highlight key accomplishments and patterns."
+
+  # Local model settings (Ollama or OpenAI-compatible)
+  local_model:
+    provider: "ollama"
+    base_url: "http://localhost:11434"
+    model_name: "qwen2.5vl:7b"
+    timeout_sec: 120
+
+capture:
+  region: null
+  startup_delay_seconds: 5
+  screen_check_timeout: 2
+
+menubar:
+  check_interval_seconds: 10
+
+timeline:
+  generation_interval_seconds: 300
+  gap_minutes: 5
+  title: "Chronometry Timeline"
+  include_keywords: []
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+categories:
+  focus:
+    - Code
+    - Documentation
+    - Work
+    - Learning
+    - Design
+    - Email
+    - Meeting
+
+  distraction:
+    - Video
+    - Social
+    - Browsing

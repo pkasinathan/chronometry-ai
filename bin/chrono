@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Chronometry CLI — dev wrapper.
+# After `pip install chronometry-ai`, use the `chrono` entry point directly.
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+exec "$PROJECT_ROOT/venv/bin/python" -m chronometry.cli "$@"

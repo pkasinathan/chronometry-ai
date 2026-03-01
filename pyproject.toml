@@ -1,0 +1,151 @@
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chronometry-ai"
+version = "1.1.0"
+description = "Privacy-first activity tracker with AI-powered annotation and timeline generation"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business",
+]
+dependencies = [
+    "Flask>=3.0.0",
+    "flask-cors>=4.0.0",
+    "flask-socketio>=5.3.5",
+    "mss>=9.0.1",
+    "pandas>=2.2.1",
+    "pillow>=10.4.0",
+    "plotly>=5.20.0",
+    "pynput>=1.7.6",
+    "python-socketio>=5.10.0",
+    "PyYAML>=6.0.1",
+    "requests>=2.31.0",
+    "rich>=13.0.0",
+    "rumps>=0.4.0",
+    "typer>=0.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-mock>=3.12.0",
+    "ruff>=0.4.0",
+    "mypy>=1.5.0",
+]
+
+[project.scripts]
+chrono = "chronometry.cli:main"
+chrono-webserver = "chronometry.web_server:main"
+chrono-menubar = "chronometry.menubar_app:main"
+chrono-capture = "chronometry.capture:main"
+
+[project.urls]
+Homepage = "https://github.com/pkasinathan/chronometry"
+Repository = "https://github.com/pkasinathan/chronometry"
+Issues = "https://github.com/pkasinathan/chronometry/issues"
+Changelog = "https://github.com/pkasinathan/chronometry/blob/main/CHANGELOG.md"
+
+# ── Setuptools ────────────────────────────────────────────────────────────────
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+chronometry = [
+    "defaults/*.yaml",
+    "defaults/*.plist",
+    "templates/*.html",
+]
+
+# ── Ruff (replaces black + flake8 + isort) ──────────────────────────────────
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "W",    # pycodestyle warnings
+    "I",    # isort
+    "N",    # pep8-naming
+    "B",    # flake8-bugbear
+    "A",    # flake8-builtins
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+    "RUF",  # ruff-specific
+]
+ignore = [
+    "E501",    # line too long (handled by formatter)
+    "B008",    # function call in default arg (typer pattern)
+    "A002",    # shadowing builtins (e.g. `type`, `format`)
+    "UP007",   # Optional[X] -> X | None (keep for 3.10 compat)
+    "RUF013",  # implicit Optional (gradual migration)
+    "SIM102",  # nested if → combined (readability preference)
+    "SIM117",  # multiple with → combined (readability preference)
+    "SIM108",  # ternary instead of if/else (readability preference)
+    "SIM105",  # contextlib.suppress (readability preference)
+    "RUF001",  # ambiguous unicode in string (emoji/symbols)
+    "B904",    # raise from (gradual migration)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"src/chronometry/web_server.py" = ["F401", "N801"]
+"src/chronometry/common.py" = ["E722"]
+"src/chronometry/capture.py" = ["E722"]
+"src/chronometry/menubar_app.py" = ["E722"]
+"src/chronometry/quick_test.py" = ["E722"]
+"tests/*" = ["W293", "W291", "F841", "F401", "F821", "E722", "B007", "B017", "RUF059"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["chronometry"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ── Pytest ───────────────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+log_cli = false
+log_file = "logs/pytest.log"
+log_file_level = "DEBUG"
+log_format = "%(asctime)s %(levelname)s %(message)s"
+log_date_format = "%Y-%m-%d %H:%M:%S"
+addopts = "-v --tb=short"
+
+# ── Mypy ─────────────────────────────────────────────────────────────────────
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true
+
+# ── Coverage ─────────────────────────────────────────────────────────────────
+
+[tool.coverage.run]
+source = ["src/chronometry"]
+omit = ["tests/*", "*/test_*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
