@@ -88,6 +88,12 @@ pip3 install chronometry-ai
 
 # Or with uv
 uv pip install chronometry-ai
+
+# Or in a dedicated virtual environment
+mkdir -p ~/.chronometry
+python3 -m venv ~/.chronometry/venv
+source ~/.chronometry/venv/bin/activate
+pip install chronometry-ai
 ```
 
 ### Initialize
@@ -124,6 +130,8 @@ chrono service start
 # Open the dashboard
 chrono open
 ```
+
+On first install, macOS will prompt **"Chronometry" would like to control this computer using accessibility features**. Click **Open System Settings**, toggle **Chronometry** on, then restart the service with `chrono service restart menubar`. This enables the Cmd+Shift+6 hotkey for region capture.
 
 The dashboard is at **http://localhost:8051**.
 

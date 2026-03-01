@@ -79,6 +79,8 @@ Install as macOS services that auto-start at login:
 chrono service install
 ```
 
+On first install, macOS will prompt **"Chronometry" would like to control this computer using accessibility features**. Click **Open System Settings**, toggle **Chronometry** on, then restart the service with `chrono service restart menubar`. This enables the Cmd+Shift+6 hotkey.
+
 Or start manually (without auto-start at login):
 
 ```bash
@@ -610,6 +612,8 @@ chrono service install webserver  # Install only the web server
 ```
 
 This copies plist files to `~/Library/LaunchAgents/` and loads them into launchd. Services will auto-start at login.
+
+On first install, macOS will prompt you to grant Accessibility permission to **Chronometry**. Click **Open System Settings**, toggle **Chronometry** on, then run `chrono service restart menubar` to activate the Cmd+Shift+6 hotkey.
 
 ### How do I start, stop, and restart services?
 
