@@ -587,8 +587,37 @@ class ChronometryApp(rumps.App):
         sys.exit(0)
 
 
+def _hide_dock_icon():
+    """Suppress the Python rocket icon from the Dock.
+
+    When running via `python -m`, macOS shows a Dock icon for the Python
+    process. Setting LSBackgroundOnly in the running app's Info.plist
+    tells macOS this is an agent app (menu bar only, no Dock icon).
+    """
+    try:
+        from AppKit import NSBundle
+
+        bundle = NSBundle.mainBundle()
+        info = bundle.localizedInfoDictionary() or bundle.infoDictionary()
+        if info:
+            info["LSBackgroundOnly"] = "1"
+    except ImportError:
+        try:
+            import subprocess
+
+            plist_path = os.path.join(sys.prefix, "Resources", "Python.app", "Contents", "Info.plist")
+            if os.path.exists(plist_path):
+                subprocess.run(
+                    ["/usr/libexec/PlistBuddy", "-c", "Add :LSUIElement bool true", plist_path],
+                    capture_output=True,
+                )
+        except Exception:
+            pass
+
+
 def main():
     """Main entry point."""
+    _hide_dock_icon()
     try:
         app = ChronometryApp()
         app.run()
