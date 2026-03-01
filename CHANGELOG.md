@@ -4,6 +4,11 @@ All notable changes to Chronometry will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.2] - 2026-02-28
+
+### Changed
+- "Open Timeline (Today)" menu bar action now opens the dashboard timeline (`localhost:8051/timeline`) instead of a standalone static HTML file
+
 ## [1.0.0] - 2026-02-28
 
 ### Features

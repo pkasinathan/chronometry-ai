@@ -500,17 +500,8 @@ class ChronometryApp(rumps.App):
 
     def open_timeline(self, _):
         """Open today's timeline in browser."""
-        output_dir = Path(self.config["timeline"].get("output_dir", "./output"))
-        today = format_date(datetime.now())
-        timeline_file = output_dir / f"timeline_{today}.html"
-
-        if timeline_file.exists():
-            webbrowser.open(f"file://{timeline_file.absolute()}")
-            logger.info(f"Opened timeline: {timeline_file}")
-        else:
-            rumps.alert(
-                "Timeline Not Found", f"No timeline found for today.\nFile: {timeline_file}\n\nGenerate one first."
-            )
+        webbrowser.open("http://localhost:8051/timeline")
+        logger.info("Opened timeline in dashboard")
 
     def open_data_folder(self, _):
         """Open the data folder in Finder."""
