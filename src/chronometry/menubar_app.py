@@ -576,11 +576,11 @@ class ChronometryApp(rumps.App):
         if self.is_running:
             try:
                 self._stop_capture()
-            except:
+            except Exception:
                 pass
 
         # Stop the service (same command as manage_services.sh stop)
-        subprocess.run(["launchctl", "stop", "com.chronometry.menubar"])
+        subprocess.run(["launchctl", "stop", "user.chronometry.menubar"])
         logger.info("Service stopped")
 
         # Exit

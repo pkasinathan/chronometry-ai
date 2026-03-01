@@ -55,13 +55,6 @@ _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 _MAX_DAYS = 365
 
 
-def _safe_error(e: Exception) -> str:
-    """Return a sanitized error string for API responses (no internal paths)."""
-    msg = str(e)
-    home = str(Path.home())
-    return msg.replace(home, "~").replace(str(CHRONOMETRY_HOME), "~/.chronometry")
-
-
 def _validate_timestamp(ts: str) -> bool:
     return bool(_TIMESTAMP_RE.match(ts))
 
@@ -251,7 +244,7 @@ def run_annotation():
             )
         except Exception as e:
             logger.error(f"Annotation run failed: {e}", exc_info=True)
-            socketio.emit("annotation_complete", {"error": str(e)})
+            socketio.emit("annotation_complete", {"error": "Annotation failed"})
 
     threading.Thread(target=_run, daemon=True).start()
     return jsonify({"status": "started"})

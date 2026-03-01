@@ -108,7 +108,7 @@ def main():
         try:
             num_captures = int(sys.argv[1])
             print(f"📸 Will capture {num_captures} screenshot(s)")
-        except:
+        except (ValueError, IndexError):
             print("Usage: python quick_test.py [number_of_captures]")
             print("Defaulting to 1 capture")
 

@@ -2,53 +2,37 @@
 
 All notable changes to Chronometry will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [1.1.0] - 2026-02-28
+## [1.0.0] - 2026-02-28
 
-### Added
-- PyPI package distribution as `chronometry-ai` (`pip install chronometry-ai`)
-- `chrono init` command to bootstrap `~/.chronometry/` on first run
-- `chrono validate` command for system health checks
-- `CHRONOMETRY_HOME` env var to override runtime directory
-- Default config files bundled with package via `importlib.resources`
-- Dedicated entry points: `chrono-webserver`, `chrono-menubar`, `chrono-capture`
-- `[project.urls]` in pyproject.toml for PyPI page links
+### Features
+- Privacy-first activity tracker — all data stays on your machine
+- Periodic screenshot capture with configurable intervals, pre-capture notifications, and screen lock / camera detection
+- AI-powered annotation using local vision models (Ollama `qwen2.5vl:7b`) with batch processing and retry logic
+- Daily digest generation with per-category summaries and overall productivity analysis
+- Timeline visualization with activity grouping, duration tracking, and HTML export
+- Modern web dashboard (Flask + Vue.js + Pico CSS) with dark/light themes, analytics charts, search, and CSV/JSON export
+- macOS menu bar app (rumps) with capture control, manual annotation/timeline/digest triggers, and global hotkey (Cmd+Shift+6)
+- Unified CLI (`chrono`) built with Typer + Rich for all operations — services, annotation, search, config, validation
+- LLM backend abstraction supporting Ollama (with auto-start and GPU crash recovery) and OpenAI-compatible APIs (vLLM, LM Studio, llama.cpp)
+- Token usage tracking with per-day logging and analytics integration
+- PyPI distribution as `chronometry-ai` — install with `pip install chronometry-ai`
+- First-run bootstrap (`chrono init`) copies default configs to `~/.chronometry/`
+- All runtime data, configs, and logs stored in `~/.chronometry/` (overridable via `CHRONOMETRY_HOME` env var)
+- macOS launchd service management (`chrono service install/start/stop/restart/uninstall`) with auto-start at login and crash recovery
+- System validation command (`chrono validate`) for health checks
+- WebSocket real-time updates for live activity notifications
+- Configurable activity categories (focus vs distraction) with keyword-based classification
+- Data retention with automatic cleanup of old frames, digests, and token usage
 
-### Changed
-- All runtime data, configs, and logs now live in `~/.chronometry/` (not the source tree)
-- Restructured from flat `src/*.py` to proper `src/chronometry/` Python package
-- `load_config()` reads from `~/.chronometry/config/` by default with auto-bootstrap
-- Launchd plists use `sys.executable -m chronometry.<module>` instead of hardcoded venv paths
-- Flask templates loaded via `importlib.resources` instead of relative filesystem paths
-- Config update API writes to `~/.chronometry/config/user_config.yaml`
-- Cleanup safety check validates against `CHRONOMETRY_HOME` instead of `cwd`
-- Package name on PyPI: `chronometry-ai` (import name: `chronometry`)
-
-### Removed
-- `PROJECT_ROOT` / `VENV_PYTHON` / `_ensure_venv()` from CLI (pip handles the environment)
-- `sys.path.insert()` hacks in CLI and test files
-- Legacy single `config.yaml` fallback in `load_config()`
-
-## [1.0.0] - 2026-02-27
-
-### Added
-- Unified Python CLI (`chrono`) replacing all shell scripts
-- Dark/light theme toggle on web dashboard (sentinel-ui design system)
-- Per-tab URL routing — browser refresh stays on current tab
-- Mobile bottom navigation bar for phone access
-- Ollama auto-start and GPU crash recovery in `llm_backends.py`
-- Pico CSS base framework for consistent UI components
-- `pyproject.toml` with ruff, pytest, mypy, and coverage config
-- `Makefile` for common dev commands (`make test`, `make lint`, `make format`)
-- Shared pytest fixtures in `tests/conftest.py`
-- LLM backend abstraction supporting remote API, Ollama, and OpenAI-compatible APIs
-
-### Changed
-- Dashboard replatformed to match sentinel-ui design system (blue accent, navy-dark palette, system-ui typography)
-- Service management moved from bash (`manage_services.sh`) to Python CLI (`chrono service`)
-- Theme switching uses `data-theme` attribute (Pico CSS convention) instead of CSS classes
-- Chart.js colors now read from CSS variables for theme awareness
-
-### Removed
-- Dependency on shell scripts for service management (scripts preserved but CLI is canonical)
+### Security
+- Path traversal protection on all file-serving endpoints
+- Input validation on all API parameters (date format, day range bounds)
+- CORS restricted to localhost origins
+- Unique Flask secret key generated per installation
+- Server binds to `127.0.0.1` by default (localhost only)
+- Debug mode disabled by default
+- Error responses return generic messages (no internal path leakage)
+- AppleScript notification strings escaped to prevent injection
+- Cleanup operations restricted to `CHRONOMETRY_HOME` directory tree
