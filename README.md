@@ -70,8 +70,8 @@ Chronometry captures periodic screenshots of your desktop, annotates them with a
 # Install Ollama
 brew install ollama
 
-# Start the Ollama server
-ollama serve
+# Start Ollama as a background service (auto-starts at login)
+brew services start ollama
 
 # Pull the vision model (used for screenshot annotation)
 ollama pull qwen2.5vl:7b

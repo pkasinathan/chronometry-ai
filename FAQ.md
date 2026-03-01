@@ -31,7 +31,7 @@ Install Ollama and pull the vision model:
 
 ```bash
 brew install ollama
-ollama serve
+brew services start ollama   # runs as a background service, auto-starts at login
 ollama pull qwen2.5vl:7b
 ```
 
@@ -325,7 +325,7 @@ digest:
 ### How do I set up Ollama?
 
 1. Install: `brew install ollama`
-2. Start the server: `ollama serve`
+2. Start as a background service: `brew services start ollama` (auto-starts at login)
 3. Pull the vision model: `ollama pull qwen2.5vl:7b`
 4. Verify: `chrono validate` checks that Ollama is reachable and models are available
 
