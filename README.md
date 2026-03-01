@@ -21,7 +21,18 @@ Chronometry captures periodic screenshots of your desktop, annotates them with a
 
 - **macOS** (menu bar app uses macOS-specific APIs)
 - **Python 3.10+**
-- **Ollama** — local LLM runtime ([install](https://ollama.com))
+- **Ollama** — local LLM runtime
+
+```bash
+# Install Ollama
+brew install ollama
+
+# Start the Ollama server
+ollama serve
+
+# Pull the vision model (used for screenshot annotation)
+ollama pull qwen2.5vl:7b
+```
 
 ### Install
 
@@ -31,9 +42,6 @@ pip install chronometry-ai
 
 # Or with uv
 uv pip install chronometry-ai
-
-# Pull the vision model
-ollama pull qwen2.5vl:7b
 ```
 
 ### Initialize
