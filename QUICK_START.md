@@ -8,9 +8,14 @@ pip install chronometry-ai
 
 ## 2. Install Ollama
 
-Download from [ollama.com](https://ollama.com) and pull the vision model:
-
 ```bash
+# Install Ollama
+brew install ollama
+
+# Start the Ollama server
+ollama serve
+
+# Pull the vision model
 ollama pull qwen2.5vl:7b
 ```
 
