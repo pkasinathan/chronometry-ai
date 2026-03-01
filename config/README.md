@@ -35,8 +35,11 @@ capture:
 ```yaml
 annotation:
   backend: local                 # "local" (privacy-first, Ollama/OpenAI-compatible)
-  screenshot_analysis_batch_size: 4
-  screenshot_analysis_prompt: "Summarize the..."
+  screenshot_analysis_batch_size: 1   # Single image per inference (V2)
+  inference_image_max_edge: 1280      # Downscale longest edge for VLM
+  inference_image_quality: 80         # JPEG quality for inference image
+  screenshot_analysis_prompt: |       # Structured JSON extraction prompt
+    You are a productivity logger. ...
 
 digest:
   backend: local                 # "local" (privacy-first, Ollama/OpenAI-compatible)
@@ -78,7 +81,7 @@ annotation:
   local_model:
     provider: "ollama"           # "ollama" or "openai_compatible" (vLLM, LM Studio)
     base_url: "http://localhost:11434"
-    model_name: "llava:7b"       # Vision model
+    model_name: "qwen2.5vl:7b"  # Vision model
     timeout_sec: 120
 
 digest:
@@ -202,8 +205,8 @@ If you have an old `config.yaml` file:
      monitor_index: 1
      retention_days: 1095
    annotation:
-     batch_size: 4
-     prompt: "Your custom prompt..."
+     screenshot_analysis_batch_size: 1
+     screenshot_analysis_prompt: "Your custom prompt..."
    digest:
      interval_seconds: 3600
    timeline:
@@ -218,8 +221,8 @@ If you have an old `config.yaml` file:
 
 4. **Test** the split configs work:
    ```bash
-   ./bin/manage_services.sh restart
-   ./bin/manage_services.sh status
+   chrono service restart
+   chrono status
    ```
 
 5. **Archive** old config.yaml:
