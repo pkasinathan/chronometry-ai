@@ -120,8 +120,8 @@ def _ensure_dirs():
 
 def _install_plist(name: str):
     info = SERVICES[name]
-    defaults = pkg_files("chronometry.defaults")
-    template_path = defaults.joinpath(info["plist"])
+    defaults = pkg_files("chronometry") / "defaults"
+    template_path = defaults / info["plist"]
 
     LAUNCH_AGENTS_DIR.mkdir(parents=True, exist_ok=True)
     content = template_path.read_text()
@@ -400,7 +400,13 @@ def annotate(
 
     console.print("[cyan]Running annotation…[/cyan]")
     config = load_config()
-    target_date = datetime.strptime(date, "%Y-%m-%d") if date else None
+    target_date = None
+    if date:
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            console.print(f"[bold red]Invalid date format:[/bold red] {date} (expected YYYY-MM-DD)")
+            raise typer.Exit(1)
     try:
         count = annotate_frames(config, date=target_date)
         console.print(f"[green]✓ Annotation complete ({count} frames)[/green]")
@@ -433,7 +439,14 @@ def digest(
     from chronometry.digest import generate_daily_digest, get_or_generate_digest
 
     config = load_config()
-    target = datetime.strptime(date, "%Y-%m-%d") if date else datetime.now()
+    if date:
+        try:
+            target = datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            console.print(f"[bold red]Invalid date format:[/bold red] {date} (expected YYYY-MM-DD)")
+            raise typer.Exit(1)
+    else:
+        target = datetime.now()
 
     console.print(f"[cyan]Loading digest for {target.strftime('%Y-%m-%d')}…[/cyan]")
     if force:

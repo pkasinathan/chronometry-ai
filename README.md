@@ -96,6 +96,19 @@ chrono init
 
 This creates `~/.chronometry/` with config files, data directories, and log folders.
 
+### Verify
+
+```bash
+# Check everything is set up correctly
+chrono validate
+
+# Confirm configuration is valid
+chrono config --validate
+
+# Check version
+chrono version
+```
+
 ### Run
 
 ```bash

@@ -53,7 +53,7 @@ class ChronometryApp(rumps.App):
             self.config = load_config()
         except Exception as e:
             logger.error(f"Failed to load config: {e}")
-            rumps.alert("Configuration Error", f"Failed to load config.yaml: {e}")
+            rumps.alert("Configuration Error", f"Failed to load configuration: {e}")
             raise
 
         # Application state

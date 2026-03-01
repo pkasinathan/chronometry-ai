@@ -712,10 +712,11 @@ def get_digest(date=None):
     """Get daily digest summary."""
     try:
         if date is None:
-            format_date(datetime.now())
             date_obj = datetime.now()
         else:
-            date_obj = parse_date(date)
+            date_obj, err = _validate_date_param(date)
+            if err:
+                return jsonify({"error": err}), 400
 
         force_regenerate = request.args.get("force", "false").lower() == "true"
 

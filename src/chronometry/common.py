@@ -124,7 +124,7 @@ def bootstrap(force: bool = False):
     for d in ("data/frames", "data/digests", "data/token_usage", "output", "logs"):
         (CHRONOMETRY_HOME / d).mkdir(parents=True, exist_ok=True)
 
-    defaults = pkg_files("chronometry.defaults")
+    defaults = pkg_files("chronometry") / "defaults"
     for name in ("user_config.yaml", "system_config.yaml"):
         dest = config_dir / name
         if not dest.exists() or force:
