@@ -454,7 +454,7 @@ class TestGenerateTimeline:
                 "color": "#E50914",
                 "summary": "Test",
                 "summaries": ["Test"],
-                "frames": [],
+                "frames": [{"datetime": datetime(2025, 11, 1, 10, 0), "image_base64": ""}],
             }
         ]
         mock_stats.return_value = {

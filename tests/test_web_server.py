@@ -5,7 +5,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, mock_open, patch
 
 import pytest
 
@@ -101,20 +101,20 @@ class TestDataEndpoints:
     @patch("chronometry.web_server.load_annotations")
     @patch("chronometry.web_server.group_activities")
     @patch("chronometry.web_server.calculate_stats")
-    @patch("chronometry.web_server.Path")
-    def test_get_stats(self, mock_path, mock_stats, mock_group, mock_load, client, setup_config):
+    def test_get_stats(self, mock_stats, mock_group, mock_load, client, tmp_path):
         """Test stats endpoint."""
-        # Setup mocks
-        mock_frames_dir = Mock()
-        mock_frames_dir.exists.return_value = True
-        mock_frames_dir.iterdir.return_value = [Mock(is_dir=Mock(return_value=True), name="2025-11-01")]
+        frames_dir = tmp_path / "frames"
+        frames_dir.mkdir()
+        date_dir = frames_dir / "2025-11-01"
+        date_dir.mkdir()
+        (date_dir / "20251101_100000.json").write_text("{}")
 
-        mock_path.return_value = mock_frames_dir
         mock_load.return_value = [{"datetime": datetime(2025, 11, 1, 10, 0), "summary": "Test"}]
         mock_group.return_value = [{"category": "Code"}]
-        mock_stats.return_value = {"focus_percentage": 80}
+        mock_stats.return_value = {"focus_percentage": 80, "distraction_percentage": 20}
 
-        response = client.get("/api/stats")
+        with patch("chronometry.web_server.config", {"root_dir": str(tmp_path)}):
+            response = client.get("/api/stats")
 
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -178,9 +178,11 @@ class TestDataEndpoints:
     @patch("chronometry.web_server.load_annotations")
     @patch("chronometry.web_server.group_activities")
     @patch("chronometry.web_server.get_daily_dir")
-    def test_search_activities(self, mock_daily_dir, mock_group, mock_load, client, setup_config, tmp_path):
+    def test_search_activities(self, mock_daily_dir, mock_group, mock_load, client, tmp_path):
         """Test search endpoint."""
-        daily_dir = tmp_path / "2025-11-01"
+        frames_dir = tmp_path / "frames"
+        frames_dir.mkdir()
+        daily_dir = frames_dir / "2025-11-01"
         daily_dir.mkdir()
         mock_daily_dir.return_value = daily_dir
 
@@ -196,7 +198,8 @@ class TestDataEndpoints:
             }
         ]
 
-        response = client.get("/api/search?q=python")
+        with patch("chronometry.web_server.config", {"root_dir": str(tmp_path)}):
+            response = client.get("/api/search?q=python&days=1")
 
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -209,7 +212,7 @@ class TestDataEndpoints:
     @patch("chronometry.web_server.calculate_stats")
     @patch("chronometry.web_server.get_daily_dir")
     def test_get_analytics(
-        self, mock_daily_dir, mock_stats, mock_group, mock_load, mock_tracker_class, client, setup_config, tmp_path
+        self, mock_daily_dir, mock_stats, mock_group, mock_load, mock_tracker_class, client, tmp_path
     ):
         """Test analytics endpoint."""
         daily_dir = tmp_path / "2025-11-01"
@@ -220,13 +223,22 @@ class TestDataEndpoints:
         mock_group.return_value = [
             {"category": "Code", "start_time": datetime(2025, 11, 1, 10, 0), "end_time": datetime(2025, 11, 1, 10, 30)}
         ]
-        mock_stats.return_value = {"focus_percentage": 80, "total_time": 30}
+        mock_stats.return_value = {
+            "focus_percentage": 80,
+            "distraction_percentage": 20,
+            "total_time": 30,
+            "total_activities": 1,
+            "focus_time": 24,
+            "distraction_time": 6,
+            "category_breakdown": {"Code": 30},
+        }
 
         mock_tracker = Mock()
         mock_tracker.get_daily_usage.return_value = {"total_tokens": 100, "by_type": {"digest": 100}}
         mock_tracker_class.return_value = mock_tracker
 
-        response = client.get("/api/analytics?days=1")
+        with patch("chronometry.web_server.config", {"root_dir": str(tmp_path)}):
+            response = client.get("/api/analytics?days=1")
 
         assert response.status_code == 200
         data = json.loads(response.data)
@@ -364,24 +376,22 @@ class TestFrameEndpoints:
         assert len(data["frames"]) == 1
         assert data["frames"][0]["summary"] == "Test activity"
 
-    @patch("chronometry.web_server.send_file")
     @patch("chronometry.web_server.ensure_absolute_path")
     @patch("chronometry.web_server.get_daily_dir")
-    def test_get_frame_image(self, mock_daily_dir, mock_ensure, mock_send, client, setup_config, tmp_path):
+    def test_get_frame_image(self, mock_daily_dir, mock_ensure, client, tmp_path):
         """Test get frame image endpoint."""
-        daily_dir = tmp_path / "2025-11-01"
-        daily_dir.mkdir()
+        daily_dir = tmp_path / "frames" / "2025-11-01"
+        daily_dir.mkdir(parents=True)
         image_path = daily_dir / "20251101_100000.png"
-        image_path.write_bytes(b"fake image")
+        image_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 100)
 
         mock_daily_dir.return_value = daily_dir
         mock_ensure.return_value = str(tmp_path)
-        mock_send.return_value = Mock()
 
-        response = client.get("/api/frames/2025-11-01/20251101_100000/image")
+        with patch("chronometry.web_server.config", {"root_dir": str(tmp_path)}):
+            response = client.get("/api/frames/2025-11-01/20251101_100000/image")
 
         assert response.status_code == 200
-        mock_send.assert_called_once()
 
     @patch("chronometry.web_server.get_daily_dir")
     @patch("chronometry.web_server.ensure_absolute_path")
@@ -411,36 +421,28 @@ class TestDatesEndpoint:
         with patch("chronometry.web_server.config", {"root_dir": "/tmp/test"}):
             yield
 
-    @patch("chronometry.web_server.Path")
-    def test_get_available_dates(self, mock_path_class, client, setup_config, tmp_path):
+    def test_get_available_dates(self, client, tmp_path):
         """Test get available dates endpoint."""
-        # Create mock date directories
         frames_dir = tmp_path / "frames"
         frames_dir.mkdir()
 
         date_dir_1 = frames_dir / "2025-11-01"
         date_dir_1.mkdir()
-        (date_dir_1 / "test.json").write_text("{}")
+        (date_dir_1 / "20251101_100000.json").write_text("{}")
 
         date_dir_2 = frames_dir / "2025-11-02"
         date_dir_2.mkdir()
-        (date_dir_2 / "test.json").write_text("{}")
+        (date_dir_2 / "20251102_100000.json").write_text("{}")
 
-        # Setup mock to return our frames dir
-        mock_path_inst = Mock()
-        mock_path_inst.exists.return_value = True
-        mock_path_inst.iterdir.return_value = [
-            Mock(is_dir=Mock(return_value=True), name="2025-11-01", glob=Mock(return_value=[Path("test.json")])),
-            Mock(is_dir=Mock(return_value=True), name="2025-11-02", glob=Mock(return_value=[Path("test.json")])),
-        ]
-
-        with patch("chronometry.web_server.Path", return_value=mock_path_inst):
+        with patch("chronometry.web_server.config", {"root_dir": str(tmp_path)}), \
+             patch("chronometry.web_server.parse_date") as mock_parse:
+            mock_parse.side_effect = lambda d: datetime.strptime(d, "%Y-%m-%d")
             response = client.get("/api/dates")
 
-            assert response.status_code == 200
-            data = json.loads(response.data)
-            # The actual implementation uses Path() differently, so just check structure
-            assert "dates" in data
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert "dates" in data
+        assert len(data["dates"]) == 2
 
 
 class TestErrorHandling:
@@ -501,28 +503,21 @@ class TestConfigurationUpdate:
             yield client
 
     @patch("chronometry.web_server.init_config")
-    @patch("chronometry.web_server.Path")
-    def test_update_config_user_config(self, mock_path_class, mock_init, client, tmp_path):
+    def test_update_config_user_config(self, mock_init, client, tmp_path):
         """Test updating user configuration."""
-        # Create test config file
-        config_file = tmp_path / "user_config.yaml"
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        config_file = config_dir / "user_config.yaml"
         config_file.write_text("capture:\n  capture_interval_seconds: 900\n")
 
-        mock_path_inst = Mock()
-        mock_path_inst.exists.return_value = True
-        mock_path_class.return_value = mock_path_inst
+        with patch("chronometry.web_server.CHRONOMETRY_HOME", tmp_path):
+            response = client.put(
+                "/api/config",
+                data=json.dumps({"capture": {"capture_interval_seconds": 600}}),
+                content_type="application/json",
+            )
 
-        with patch("builtins.open", mock_open(read_data="capture:\n  capture_interval_seconds: 900\n")):
-            with patch("chronometry.web_server.yaml.safe_load", return_value={"capture": {"capture_interval_seconds": 900}}):
-                response = client.put(
-                    "/api/config",
-                    data=json.dumps({"capture": {"capture_interval_seconds": 600}}),
-                    content_type="application/json",
-                )
-
-                # Note: Full test would require complex YAML mocking
-                # Just verify endpoint exists and responds
-                assert response.status_code in [200, 500]  # May fail due to file operations
+            assert response.status_code in [200, 500]
 
 
 class TestWebSocketEvents:

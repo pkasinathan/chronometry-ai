@@ -32,7 +32,8 @@ class TestEncodeImageToBase64:
 class TestCallVisionAPI:
     """Tests for vision API backend routing."""
 
-    def test_invalid_backend_raises_error(self):
+    @patch("chronometry.llm_backends.ensure_ollama_running")
+    def test_invalid_backend_raises_error(self, mock_ensure):
         """Test that an invalid backend raises ValueError."""
         config = {
             "annotation": {
@@ -40,6 +41,9 @@ class TestCallVisionAPI:
                 "api_url": "https://example.com/api",
                 "screenshot_analysis_prompt": "test",
                 "timeout_sec": 30,
+                "local_model": {
+                    "provider": "invalid_backend",
+                },
             }
         }
 
@@ -411,7 +415,7 @@ class TestFrameAnnotation:
         count = annotate_frames(test_config, datetime(2025, 11, 1))
 
         assert count == 10
-        assert mock_process.call_count == 3
+        assert mock_process.call_count == 10  # V2: batch_size clamped to 1, each frame is its own batch
 
     @patch("chronometry.annotate.process_batch")
     @patch("chronometry.annotate.get_json_path")
@@ -439,7 +443,7 @@ class TestFrameAnnotation:
         count = annotate_frames(test_config, datetime(2025, 11, 1))
 
         assert count == 2
-        mock_process.assert_called_once()
+        assert mock_process.call_count == 2  # V2: batch_size clamped to 1
 
     @patch("chronometry.annotate.get_json_path")
     @patch("chronometry.annotate.get_daily_dir")
