@@ -737,6 +737,53 @@ def open_dashboard():
 
 
 @app.command()
+def update():
+    """Pull latest code and restart services."""
+    repo_dir = Path(__file__).resolve().parent.parent.parent
+    git_dir = repo_dir / ".git"
+
+    if not git_dir.is_dir():
+        console.print("[bold red]Not a git repository.[/bold red] Update is only available for dev installs.")
+        raise typer.Exit(1)
+
+    console.print(f"[cyan]Pulling latest from {repo_dir}…[/cyan]")
+    result = subprocess.run(["git", "pull"], cwd=str(repo_dir), capture_output=True, text=True)
+    if result.returncode != 0:
+        console.print(f"[bold red]git pull failed:[/bold red]\n{result.stderr.strip()}")
+        raise typer.Exit(1)
+    console.print(f"  {result.stdout.strip()}")
+
+    console.print("[cyan]Reinstalling package…[/cyan]")
+    pip_result = subprocess.run(
+        [sys.executable, "-m", "pip", "install", "-e", str(repo_dir), "-q"],
+        capture_output=True, text=True,
+    )
+    if pip_result.returncode != 0:
+        console.print(f"[bold red]pip install failed:[/bold red]\n{pip_result.stderr.strip()}")
+        raise typer.Exit(1)
+    console.print("  [green]✓ Package updated[/green]")
+
+    console.print("[cyan]Restarting services…[/cyan]")
+    for name, info in SERVICES.items():
+        plist_path = LAUNCH_AGENTS_DIR / info["plist"]
+        if _is_loaded(info["label"]):
+            subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)
+            time.sleep(1)
+            _ensure_dirs()
+            _install_plist(name)
+            subprocess.run(["launchctl", "load", str(plist_path)], capture_output=True)
+            time.sleep(1)
+            if _is_loaded(info["label"]):
+                console.print(f"  [green]✓ {name}: restarted[/green]")
+            else:
+                console.print(f"  [red]✗ {name}: failed to restart[/red]")
+        else:
+            console.print(f"  [yellow]{name}: not running (skipped)[/yellow]")
+
+    console.print("\n[bold green]Update complete.[/bold green]")
+
+
+@app.command()
 def version():
     """Show version information."""
     console.print(f"[bold cyan]Chronometry[/bold cyan] v{__version__}")

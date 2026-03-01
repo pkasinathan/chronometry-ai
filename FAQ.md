@@ -117,6 +117,7 @@ The dashboard is available at **http://localhost:8051**.
 | `chrono config [--validate]` | Show or validate configuration |
 | `chrono validate` | Run system validation checks |
 | `chrono open` | Open the dashboard in your browser |
+| `chrono update` | Pull latest code and restart running services (dev installs) |
 | `chrono version` | Show version information |
 
 Service names are `webserver` and `menubar`. Omit the name to act on all services.

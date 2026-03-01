@@ -153,6 +153,7 @@ chrono search <query>             # Search activities
 chrono config [--validate]        # Show/validate configuration
 chrono validate                   # Run system validation checks
 chrono open                       # Open dashboard in browser
+chrono update                     # Pull latest code + restart services
 chrono version                    # Version info
 ```
 
