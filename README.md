@@ -18,43 +18,44 @@ Chronometry captures periodic screenshots of your desktop, annotates them with a
 ## How It Works
 
 ```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                                Your Mac                                     │
-│                                                                              │
-│   ⏱️ Menu Bar App               📸 Capture Engine                             │
-│   ├─ Start/Pause Capture        ├─ Screenshots every 15 min                  │
-│   ├─ Manual Triggers            ├─ Screen lock detection                     │
-│   └─ Quick Actions              └─ Camera-in-use skip                        │
-│           │                                │                                 │
-│           ▼                                ▼                                 │
-│      ┌───────────────────────────────────────────────┐                        │
-│      │          ~/.chronometry/data/frames/          │                        │
-│      │          2026-02-28/20260228_143000.png       │                        │
-│      └───────────────────────┬───────────────────────┘                        │
-│                              │                                                │
-│                              ▼                                                │
-│      ┌───────────────────────────────────────────────┐                        │
-│      │          🤖 AI Annotation (Ollama)            │                        │
-│      │    Local vision model analyzes screenshots    │                        │
-│      │           → JSON summaries                    │                        │
-│      └───────────────────────┬───────────────────────┘                        │
-│                              │                                                │
-│                  ┌───────────┴────────────┐                                   │
-│                  ▼                        ▼                                   │
-│      ┌─────────────────────┐  ┌──────────────────────┐                        │
-│      │   📊 Timeline       │  │ 📝 Daily Digest      │                        │
-│      │ Activity groups     │  │ AI summary by       │                        │
-│      │ + durations         │  │ category            │                        │
-│      └──────────┬──────────┘  └───────────┬──────────┘                        │
-│                └───────────────┬───────────┘                                 │
-│                                ▼                                             │
-│      ┌───────────────────────────────────────────────┐                        │
-│      │      🌐 Web Dashboard (localhost:8051)        │                        │
-│      │      Timeline · Analytics · Search            │                        │
-│      └───────────────────────────────────────────────┘                        │
-│                                                                              │
-│      Everything runs locally. Nothing leaves your machine.                    │
-└──────────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│                           Your Mac                             │
+│                                                                │
+│   ⏱️ Menu Bar App               📸 Capture Engine              │
+│   ├─ Start/Pause Capture        ├─ Screenshots every 15 min    │
+│   ├─ Manual Triggers            ├─ Screen lock detection       │
+│   └─ Quick Actions              └─ Camera-in-use skip          │
+│           │                                │                   │
+│           ▼                                ▼                   │
+│      ┌───────────────────────────────────────────────┐         │
+│      │          ~/.chronometry/data/frames/          │         │
+│      │          2026-02-28/20260228_143000.png       │         │
+│      └───────────────────────┬───────────────────────┘         │
+│                              │                                 │
+│                              ▼                                 │
+│      ┌───────────────────────────────────────────────┐         │
+│      │          🤖 AI Annotation (Ollama)            │         │
+│      │    Local vision model analyzes screenshots    │         │
+│      │           → JSON summaries                    │         │
+│      └───────────────────────┬───────────────────────┘         │
+│                              │                                 │
+│                  ┌───────────┴────────────┐                    │
+│                  ▼                        ▼                    │
+│      ┌─────────────────────┐  ┌──────────────────────┐         │
+│      │   📊 Timeline       │  │ 📝 Daily Digest      │         │
+│      │ Activity groups     │  │ AI summary by        │         │
+│      │ + durations         │  │ category             │         │
+│      └──────────┬──────────┘  └───────────┬──────────┘         │
+│                 └────────────┬────────────┘                    │
+│                              ▼                                 │
+│      ┌───────────────────────────────────────────────┐         │
+│      │      🌐 Web Dashboard (localhost:8051)        │         │
+│      │      Timeline · Analytics · Search            │         │
+│      └───────────────────────────────────────────────┘         │
+│                                                                │
+│      Everything runs locally. Nothing leaves your machine.     │
+└────────────────────────────────────────────────────────────────┘
+
 ```
 
 ## Quick Start
