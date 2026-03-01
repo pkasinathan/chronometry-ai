@@ -16,6 +16,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
+def _strip_code_fences(text: str) -> str:
+    """Strip markdown code fences (```json ... ```) that VLMs often add."""
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        lines = stripped.split("\n")
+        if lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        stripped = "\n".join(lines).strip()
+    return stripped
+
+
 def extract_summary_text(summary_field) -> str:
     """Extract a human-readable string from a summary field.
 
@@ -35,8 +48,9 @@ def extract_summary_text(summary_field) -> str:
             parts.append(summary_field["artifact"])
         return " - ".join(parts) if parts else str(summary_field)
     if isinstance(summary_field, str):
+        cleaned = _strip_code_fences(summary_field)
         try:
-            parsed = json.loads(summary_field)
+            parsed = json.loads(cleaned)
             if isinstance(parsed, dict):
                 return extract_summary_text(parsed)
         except (json.JSONDecodeError, ValueError):

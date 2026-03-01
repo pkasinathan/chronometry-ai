@@ -331,15 +331,17 @@ annotation:
 
     {recent_context}
 
-    Extract from this screenshot:
-    1. Active application
-    2. What I am working on
-    3. Type of task (coding, analysis, browsing, meeting, etc.)
-    4. Specific artifact (file, repo, table, URL)
-    5. Intended next step (inferred)
+    Extract from this screenshot and respond as a single JSON object with exactly these keys:
+    - "application": active application name
+    - "activity": what I am working on
+    - "task_type": type of task (coding, analysis, browsing, meeting, etc.)
+    - "artifact": specific file, repo, table, or URL
+    - "next_step": intended next step (inferred)
 
     Respond in compact JSON only. No explanation.
 ```
+
+The keys (`application`, `activity`, `task_type`, `artifact`, `next_step`) are used by the timeline to display structured summaries. If you change the key names, the timeline will fall back to showing raw text.
 
 ### What LLM backends are supported?
 
