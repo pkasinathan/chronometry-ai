@@ -6,8 +6,9 @@ Chronometry captures periodic screenshots of your desktop, annotates them with a
 
 ## Features
 
-- **Screenshot Capture** — Periodic screenshots with configurable intervals, pre-capture notifications, and screen lock detection
-- **AI Annotation** — Local vision models (Ollama / OpenAI-compatible) analyze screenshots and describe your activities
+- **Screenshot Capture** — Periodic screenshots with configurable intervals, automatic downscaling for inference, pre-capture notifications, and screen lock detection
+- **OS Metadata Capture** — Automatic capture of active app, window title, browser URL, and workspace path alongside each screenshot
+- **AI Annotation** — Local vision models (Ollama / OpenAI-compatible) analyze downscaled screenshots with OS metadata context and produce structured JSON summaries
 - **Daily Digest** — AI-generated summaries of your workday organized by category
 - **Timeline Visualization** — Browse activities by date with expandable screenshot details
 - **Web Dashboard** — Modern web UI with dark/light themes, analytics charts, and search
@@ -28,15 +29,16 @@ Chronometry captures periodic screenshots of your desktop, annotates them with a
 │           │                                │                   │
 │           ▼                                ▼                   │
 │      ┌───────────────────────────────────────────────┐         │
-│      │          ~/.chronometry/data/frames/          │         │
-│      │          2026-02-28/20260228_143000.png       │         │
+│      │        ~/.chronometry/data/frames/            │         │
+│      │  .png (original) + _inference.jpg (1280px)    │         │
+│      │  + _meta.json (active app, title, URL)        │         │
 │      └───────────────────────┬───────────────────────┘         │
 │                              │                                 │
 │                              ▼                                 │
 │      ┌───────────────────────────────────────────────┐         │
 │      │          🤖 AI Annotation (Ollama)            │         │
-│      │    Local vision model analyzes screenshots    │         │
-│      │           → JSON summaries                    │         │
+│      │  Downscaled JPEG + OS metadata + recent       │         │
+│      │  context → structured JSON output             │         │
 │      └───────────────────────┬───────────────────────┘         │
 │                              │                                 │
 │                  ┌───────────┴────────────┐                    │
@@ -141,7 +143,7 @@ The dashboard is at **http://localhost:8051**.
 chrono init                       # Initialize ~/.chronometry
 chrono status                     # Service status overview
 chrono service start|stop|restart|install|uninstall [name]
-chrono logs [-f] [-e] [name]      # View service logs
+chrono logs [-f] [--stdout] [name] # View service logs
 chrono annotate                   # Run annotation on pending frames
 chrono timeline                   # Generate timeline
 chrono digest [-d DATE] [-f]      # Show/generate daily digest
@@ -162,8 +164,9 @@ src/chronometry/
 ├── cli.py            # Unified CLI (Typer + Rich)
 ├── menubar_app.py    # macOS menu bar app (rumps)
 ├── web_server.py     # Flask web dashboard
-├── capture.py        # Screenshot capture engine
-├── annotate.py       # Vision model annotation
+├── capture.py        # Screenshot capture + downscaling engine
+├── annotate.py       # Vision model annotation with metadata injection
+├── os_metadata.py    # macOS metadata capture (active app, window title, URL)
 ├── digest.py         # Daily digest generation
 ├── timeline.py       # Timeline visualization
 ├── llm_backends.py   # LLM provider abstraction (Ollama, OpenAI-compatible)
@@ -190,6 +193,11 @@ All runtime data lives in `~/.chronometry/` (overridable via `CHRONOMETRY_HOME` 
 │   └── backup/              # Auto-backups before config changes
 ├── data/
 │   ├── frames/              # Screenshots by date (YYYY-MM-DD/)
+│   │   └── 2026-03-01/
+│   │       ├── 20260301_143000.png            # Original full-res screenshot
+│   │       ├── 20260301_143000_inference.jpg  # Downscaled JPEG for VLM
+│   │       ├── 20260301_143000_meta.json      # OS metadata (app, title, URL)
+│   │       └── 20260301_143000.json           # AI annotation
 │   ├── digests/             # Cached daily digests
 │   └── token_usage/         # LLM token tracking
 ├── logs/                    # Service logs
@@ -208,8 +216,11 @@ capture:
 
 annotation:
   annotation_mode: manual         # "manual" or "auto"
-  screenshot_analysis_batch_size: 4
-  screenshot_analysis_prompt: "What is shown in this screenshot?"
+  screenshot_analysis_batch_size: 1
+  inference_image_max_edge: 1280  # Downscale longest edge for VLM
+  inference_image_quality: 80     # JPEG quality for inference image
+  screenshot_analysis_prompt: |   # Structured JSON extraction prompt
+    You are a productivity logger. ...
 
 notifications:
   enabled: true

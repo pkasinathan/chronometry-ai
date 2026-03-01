@@ -32,7 +32,6 @@ from chronometry.common import (
 from chronometry.digest import generate_daily_digest
 from chronometry.timeline import generate_timeline
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -584,10 +583,9 @@ class ChronometryApp(rumps.App):
         if tap is None:
             logger.error(
                 "CGEventTapCreate failed — grant Accessibility permission to "
-                "the Python binary running this process (sys.executable: %s, "
-                "resolved: %s) in System Settings > Privacy & Security > Accessibility.",
+                "Chronometry in System Settings > Privacy & Security > Accessibility. "
+                "(binary: %s)",
                 sys.executable,
-                Path(sys.executable).resolve(),
             )
             return
 

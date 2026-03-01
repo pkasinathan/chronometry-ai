@@ -5,14 +5,13 @@ from __future__ import annotations
 import io
 import logging
 import os
+import re
 import shutil
 import threading
 from collections import defaultdict
 from datetime import datetime, timedelta
 from importlib.resources import files as pkg_files
 from pathlib import Path
-
-import re
 
 import pandas as pd
 import yaml
@@ -23,6 +22,7 @@ from flask_socketio import SocketIO, emit
 from chronometry import CHRONOMETRY_HOME
 from chronometry.annotate import annotate_frames
 from chronometry.common import (
+    count_unannotated_frames,
     ensure_absolute_path,
     format_date,
     get_daily_dir,
@@ -30,12 +30,12 @@ from chronometry.common import (
     load_json,
     parse_date,
     parse_timestamp,
+    show_notification,
 )
 from chronometry.digest import generate_daily_digest, get_or_generate_digest
 from chronometry.timeline import calculate_stats, generate_timeline, group_activities, load_annotations
 from chronometry.token_usage import TokenUsageTracker
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,7 @@ socketio = SocketIO(app, cors_allowed_origins=_ALLOWED_ORIGINS)
 
 # Global config
 config = None
+_annotation_running = False
 
 _TIMESTAMP_RE = re.compile(r"^\d{8}_\d{6}$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -229,9 +230,17 @@ def update_config():
 @app.route("/api/annotate/run", methods=["POST"])
 def run_annotation():
     """Trigger annotation, timeline, and digest in a background thread."""
+    global _annotation_running
+
+    if _annotation_running:
+        return jsonify({"status": "already_running"})
+
+    _annotation_running = True
 
     def _run():
+        global _annotation_running
         try:
+            show_notification("Chronometry", "Annotation started — this may take a few minutes")
             count = annotate_frames(config)
             logger.info(f"Annotation complete: {count} frames")
             generate_timeline(config)
@@ -242,9 +251,13 @@ def run_annotation():
                 "annotation_complete",
                 {"frames_annotated": count, "total_activities": digest.get("total_activities", 0)},
             )
+            show_notification("Chronometry", f"Annotation complete — {count} frames annotated")
         except Exception as e:
             logger.error(f"Annotation run failed: {e}", exc_info=True)
             socketio.emit("annotation_complete", {"error": "Annotation failed"})
+            show_notification("Chronometry", f"Annotation failed: {e!s}")
+        finally:
+            _annotation_running = False
 
     threading.Thread(target=_run, daemon=True).start()
     return jsonify({"status": "started"})
@@ -270,7 +283,7 @@ def get_stats():
                 continue
 
             try:
-                json_files = list(date_dir.glob("*.json"))
+                json_files = [f for f in date_dir.glob("*.json") if not f.stem.endswith("_meta")]
                 total_frames += len(json_files)
 
                 annotations = load_annotations(date_dir)
@@ -628,25 +641,58 @@ def get_frames():
             return jsonify({"frames": []})
 
         frames = []
-        json_files = sorted(daily_dir.glob("*.json"))
+        json_files = sorted(
+            f for f in daily_dir.glob("*.json") if not f.stem.endswith("_meta")
+        )
 
         for json_file in json_files:
             data = load_json(json_file)
 
             timestamp = json_file.stem
-            frames.append(
-                {
-                    "timestamp": timestamp,
-                    "datetime": parse_timestamp(timestamp).isoformat(),
-                    "summary": data.get("summary", ""),
-                    "image_file": data.get("image_file", ""),
-                }
-            )
+            frame_info = {
+                "timestamp": timestamp,
+                "datetime": parse_timestamp(timestamp).isoformat(),
+                "summary": data.get("summary", ""),
+                "image_file": data.get("image_file", ""),
+            }
+            if data.get("metadata"):
+                frame_info["metadata"] = data["metadata"]
+            if data.get("inference_image"):
+                frame_info["inference_image"] = data["inference_image"]
+            frames.append(frame_info)
 
         return jsonify({"frames": frames})
     except Exception as e:
         logger.error(f"Error getting frames: {e}")
         return jsonify({"error": "Failed to load frames"}), 500
+
+
+@app.route("/api/frames/stats")
+def get_frame_stats():
+    """Get frame counts (total, annotated, unannotated) for a date."""
+    try:
+        date_str = request.args.get("date", format_date(datetime.now()))
+        date_obj, err = _validate_date_param(date_str)
+        if err:
+            return jsonify({"error": err}), 400
+
+        root_dir = config["root_dir"]
+        daily_dir = get_daily_dir(root_dir, date_obj)
+
+        if not daily_dir.exists():
+            return jsonify({"total": 0, "annotated": 0, "unannotated": 0, "annotation_running": _annotation_running})
+
+        total = len(list(daily_dir.glob("*.png")))
+        unannotated = count_unannotated_frames(daily_dir)
+        return jsonify({
+            "total": total,
+            "annotated": total - unannotated,
+            "unannotated": unannotated,
+            "annotation_running": _annotation_running,
+        })
+    except Exception as e:
+        logger.error(f"Error getting frame stats: {e}")
+        return jsonify({"error": "Failed to load frame stats"}), 500
 
 
 @app.route("/api/frames/<date>/<timestamp>/image")
@@ -694,7 +740,7 @@ def get_available_dates():
             try:
                 parse_date(date_dir.name)
 
-                json_files = list(date_dir.glob("*.json"))
+                json_files = [f for f in date_dir.glob("*.json") if not f.stem.endswith("_meta")]
 
                 dates.append({"date": date_dir.name, "frame_count": len(json_files)})
             except ValueError:

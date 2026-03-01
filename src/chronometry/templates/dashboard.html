@@ -376,6 +376,53 @@
             transform: scale(1.02);
         }
 
+        .activity-frame-block {
+            margin-bottom: 0.75rem;
+        }
+
+        .metadata-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            font-weight: 500;
+            max-width: 260px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .badge-app {
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent-text);
+            border: 1px solid rgba(59, 130, 246, 0.25);
+        }
+
+        .badge-title {
+            background: rgba(168, 162, 232, 0.12);
+            color: #a8a2e8;
+            border: 1px solid rgba(168, 162, 232, 0.2);
+        }
+
+        .badge-url {
+            background: rgba(74, 222, 128, 0.12);
+            color: var(--pulse-green);
+            border: 1px solid rgba(74, 222, 128, 0.2);
+        }
+
+        .badge-workspace {
+            background: rgba(251, 191, 36, 0.12);
+            color: var(--pulse-amber);
+            border: 1px solid rgba(251, 191, 36, 0.2);
+        }
+
         .loading-inline {
             display: flex;
             align-items: center;
@@ -704,10 +751,24 @@
             color: var(--text-muted);
             font-family: 'Courier New', Courier, monospace;
         }
+        .toast {
+            position: fixed;
+            bottom: 1.5rem;
+            right: 1.5rem;
+            font-size: 0.8rem;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            z-index: 9999;
+            transition: opacity 0.3s ease;
+            background: rgba(0, 0, 0, 0.75);
+        }
+        .toast-success { color: var(--pulse-green); }
+        .toast-info { color: var(--pulse-amber); }
     </style>
 </head>
 <body>
     <div id="app">
+        <div class="toast" :class="toastType" v-show="toastMessage">[[ toastMessage ]]</div>
         <!-- Header -->
         <header class="app-header">
             <div class="app-header-inner">
@@ -791,9 +852,6 @@
                                 <button class="btn-sm outline" @click="previousDigestDay">‹</button>
                                 <button class="btn-sm outline" @click="nextDigestDay">›</button>
                             </div>
-                            <button class="btn-sm" @click="runAnnotation" :disabled="annotationRunning">
-                                [[ annotationRunning ? 'Running…' : 'Annotate' ]]
-                            </button>
                             <button class="btn-sm outline" @click="regenerateDigest">Regenerate</button>
                             <button class="btn-sm outline secondary" @click="switchTab('timeline')">View Timeline</button>
                         </div>
@@ -838,10 +896,18 @@
                 <article class="section-card">
                     <header>
                         <h3>Activity Timeline</h3>
-                        <div class="date-picker">
-                            <input type="date" v-model="selectedDate" @change="loadTimelineByDate">
-                            <button class="btn-sm outline" @click="previousDay">‹</button>
-                            <button class="btn-sm outline" @click="nextDay">›</button>
+                        <div class="section-actions">
+                            <div class="date-picker">
+                                <input type="date" v-model="selectedDate" @change="loadTimelineByDate">
+                                <button class="btn-sm outline" @click="previousDay">‹</button>
+                                <button class="btn-sm outline" @click="nextDay">›</button>
+                            </div>
+                            <span style="font-size:0.75rem; color:var(--text-muted)" v-if="frameStats.total > 0">
+                                [[ frameStats.total ]] frames · [[ frameStats.annotated ]] annotated · [[ frameStats.unannotated ]] pending
+                            </span>
+                            <button class="btn-sm" @click="runAnnotation" :disabled="annotationRunning" v-if="frameStats.unannotated > 0">
+                                [[ annotationRunning ? 'Running…' : `Annotate (${frameStats.unannotated})` ]]
+                            </button>
                         </div>
                     </header>
 
@@ -871,9 +937,14 @@
                                         <span><strong>Duration:</strong> [[ formatDuration(activity.duration_minutes) ]]</span>
                                     </div>
                                     <div v-if="activityFrames.length > 0">
-                                        <div class="activity-frames-grid">
-                                            <img v-for="frame in activityFrames" :key="frame.timestamp"
-                                                 :src="getFrameImageUrl(frame)"
+                                        <div v-for="frame in activityFrames" :key="frame.timestamp" class="activity-frame-block">
+                                            <div v-if="frame.metadata" class="metadata-badges">
+                                                <span v-if="frame.metadata.active_app" class="badge badge-app">[[ frame.metadata.active_app ]]</span>
+                                                <span v-if="frame.metadata.window_title" class="badge badge-title">[[ frame.metadata.window_title ]]</span>
+                                                <span v-if="frame.metadata.url" class="badge badge-url">[[ frame.metadata.url ]]</span>
+                                                <span v-if="frame.metadata.workspace" class="badge badge-workspace">[[ frame.metadata.workspace ]]</span>
+                                            </div>
+                                            <img :src="getFrameImageUrl(frame)"
                                                  :alt="frame.timestamp"
                                                  class="activity-frame-image"
                                                  @click="viewFrameFullSize(frame)">
@@ -1027,6 +1098,7 @@
                                 <div class="settings-field">
                             <label>Batch Size</label>
                             <input type="number" v-model.number="settings.annotation.screenshot_analysis_batch_size" min="1" max="10">
+                            <small style="color:var(--text-muted)">Tip: Use 1-2 for local Ollama. 8GB RAM → 1, 16GB → 2, 32GB+ → 3-4</small>
                                     </div>
                                 <div class="settings-field">
                             <label>Analysis Prompt</label>
@@ -1151,12 +1223,17 @@
                     digest: null,
                     loadingDigest: false,
                     annotationRunning: false,
+                    frameStats: { total: 0, annotated: 0, unannotated: 0 },
+                    toastMessage: '',
+                    toastType: 'toast-success',
+                    _toastTimer: null,
+                    _annotationPoll: null,
                     searchQuery: '',
                     searchCategory: '',
                     searchResults: [],
                     settings: {
                         capture: { capture_interval_seconds: 900, monitor_index: 1, retention_days: 1095 },
-                        annotation: { screenshot_analysis_batch_size: 4, rewrite_screenshot_analysis_format_summary: false, rewrite_screenshot_analysis_prompt: '', screenshot_analysis_prompt: '' },
+                        annotation: { screenshot_analysis_batch_size: 2, rewrite_screenshot_analysis_format_summary: false, rewrite_screenshot_analysis_prompt: '', screenshot_analysis_prompt: '' },
                         timeline: { bucket_minutes: 30, exclude_keywords_text: '' },
                         digest: { interval_seconds: 3600 },
                         notifications: { enabled: true, notify_before_capture: true, pre_capture_warning_seconds: 5, pre_capture_sound: false }
@@ -1183,6 +1260,12 @@
                 setInterval(() => this.refresh(), 60000);
             },
             methods: {
+                showToast(msg, type = 'toast-success', duration = 4000) {
+                    if (this._toastTimer) clearTimeout(this._toastTimer);
+                    this.toastMessage = msg;
+                    this.toastType = type;
+                    this._toastTimer = setTimeout(() => { this.toastMessage = ''; }, duration);
+                },
                 toggleTheme() {
                     this.isDarkTheme = !this.isDarkTheme;
                     document.documentElement.setAttribute('data-theme', this.isDarkTheme ? 'dark' : 'light');
@@ -1219,25 +1302,43 @@
                     } catch(e) { this.digest = { error: 'Failed to load digest' }; }
                     finally { this.loadingDigest = false; }
                 },
-                async regenerateDigest() { await this.loadDigest(true); },
+                async regenerateDigest() { await this.loadDigest(true); this.showToast('Digest regenerated'); },
+                startAnnotationPolling() {
+                    if (this._annotationPoll) return;
+                    this._annotationPoll = setInterval(async () => {
+                        try {
+                            const tr = await fetch(`/api/timeline/${this.selectedDate}`);
+                            if (tr.ok) {
+                                const d = await tr.json();
+                                if (d.activities && d.activities.length !== this.timelineActivities.length) {
+                                    clearInterval(this._annotationPoll); this._annotationPoll = null;
+                                    this.annotationRunning = false;
+                                    await this.loadTimelineByDate(); await this.loadDigest(); await this.loadStats();
+                                    this.showToast(`Annotation complete — ${d.activities.length} activities`);
+                                }
+                            }
+                        } catch(e) {}
+                    }, 3000);
+                    setTimeout(() => {
+                        if (this._annotationPoll) {
+                            clearInterval(this._annotationPoll); this._annotationPoll = null;
+                            this.annotationRunning = false;
+                        }
+                    }, 600000);
+                },
                 async runAnnotation() {
                     this.annotationRunning = true;
+                    this.showToast('Annotation started — this may take a few minutes', 'toast-info', 5000);
                     try {
                         const r = await fetch('/api/annotate/run', { method: 'POST' });
-                        if (!r.ok) { alert('Failed to start'); this.annotationRunning = false; return; }
-                        const poll = setInterval(async () => {
-                            try {
-                                const tr = await fetch(`/api/timeline/${this.selectedDate}`);
-                                if (tr.ok) {
-                                    const d = await tr.json();
-                                    if (d.activities && d.activities.length !== this.timelineActivities.length) {
-                                        clearInterval(poll); this.annotationRunning = false;
-                                        await this.loadTimeline(); await this.loadDigest(); await this.loadStats();
-                                    }
-                                }
-                            } catch(e) {}
-                        }, 3000);
-                        setTimeout(() => { clearInterval(poll); this.annotationRunning = false; }, 600000);
+                        if (!r.ok) { this.showToast('Failed to start annotation', 'toast-info'); this.annotationRunning = false; return; }
+                        const data = await r.json();
+                        if (data.status === 'already_running') {
+                            this.showToast('Annotation already in progress', 'toast-info');
+                            this.startAnnotationPolling();
+                            return;
+                        }
+                        this.startAnnotationPolling();
                     } catch(e) { this.annotationRunning = false; }
                 },
                 previousDigestDay() {
@@ -1253,6 +1354,19 @@
                     try { this.timelineActivities = (await (await fetch(`/api/timeline/${this.selectedDate}`)).json()).activities || []; }
                     catch(e) { console.error(e); }
                     finally { this.loadingTimeline = false; }
+                    this.loadFrameStats();
+                },
+                async loadFrameStats() {
+                    try {
+                        const data = await (await fetch(`/api/frames/stats?date=${this.selectedDate}`)).json();
+                        this.frameStats = data;
+                        if (data.annotation_running && !this.annotationRunning) {
+                            this.annotationRunning = true;
+                            this.startAnnotationPolling();
+                        } else if (!data.annotation_running && this.annotationRunning && !this._annotationPoll) {
+                            this.annotationRunning = false;
+                        }
+                    } catch(e) { this.frameStats = { total: 0, annotated: 0, unannotated: 0 }; }
                 },
                 async loadAnalytics() {
                     try {

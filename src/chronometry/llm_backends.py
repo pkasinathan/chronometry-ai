@@ -11,6 +11,7 @@ import logging
 import os
 import shutil
 import subprocess
+import threading
 import time
 
 import requests
@@ -18,6 +19,8 @@ import requests
 from chronometry.token_usage import TokenUsageTracker
 
 logger = logging.getLogger(__name__)
+
+_inference_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -142,12 +145,23 @@ def _raise_or_restart_ollama(response: requests.Response, base_url: str) -> None
 # ---------------------------------------------------------------------------
 
 
-def call_ollama_vision(images: list[dict], config: dict) -> dict:
+def call_ollama_vision(
+    images: list[dict], config: dict, prompt_override: str | None = None
+) -> dict:
     """Call Ollama vision model with base64 images.
+
+    Args:
+        images: List of image dicts with base64_data and content_type
+        config: Configuration dictionary
+        prompt_override: If set, use this prompt instead of the one in config
 
     Returns:
         {"summary": str, "sources": list}
     """
+    if len(images) > 1:
+        logger.warning(f"Multiple images ({len(images)}) passed; using only the first for memory safety")
+        images = images[:1]
+
     local_config = config["annotation"].get("local_model", {})
     base_url = local_config.get("base_url", "http://localhost:11434")
     model_name = local_config.get("model_name", "llava:7b")
@@ -155,19 +169,24 @@ def call_ollama_vision(images: list[dict], config: dict) -> dict:
 
     ensure_ollama_running(base_url)
 
-    prompt = config["annotation"].get("screenshot_analysis_prompt") or config["annotation"].get("prompt", "")
+    prompt = prompt_override or config["annotation"].get("screenshot_analysis_prompt") or config["annotation"].get(
+        "prompt", ""
+    )
 
     logger.info(f"Ollama vision: POST {base_url}/api/chat model={model_name} images={len(images)}")
 
-    response = requests.post(
-        f"{base_url}/api/chat",
-        json={
-            "model": model_name,
-            "messages": [{"role": "user", "content": prompt, "images": [img["base64_data"] for img in images]}],
-            "stream": False,
-        },
-        timeout=timeout,
-    )
+    with _inference_lock:
+        response = requests.post(
+            f"{base_url}/api/chat",
+            json={
+                "model": model_name,
+                "messages": [
+                    {"role": "user", "content": prompt, "images": [img["base64_data"] for img in images]}
+                ],
+                "stream": False,
+            },
+            timeout=timeout,
+        )
     _raise_or_restart_ollama(response, base_url)
     data = response.json()
 
@@ -242,18 +261,31 @@ def call_ollama_text(
 # ---------------------------------------------------------------------------
 
 
-def call_openai_vision(images: list[dict], config: dict) -> dict:
+def call_openai_vision(
+    images: list[dict], config: dict, prompt_override: str | None = None
+) -> dict:
     """Call an OpenAI-compatible vision endpoint with base64 images.
+
+    Args:
+        images: List of image dicts with base64_data and content_type
+        config: Configuration dictionary
+        prompt_override: If set, use this prompt instead of the one in config
 
     Returns:
         {"summary": str, "sources": list}
     """
+    if len(images) > 1:
+        logger.warning(f"Multiple images ({len(images)}) passed; using only the first for memory safety")
+        images = images[:1]
+
     local_config = config["annotation"].get("local_model", {})
     base_url = local_config.get("base_url", "http://localhost:8000")
     model_name = local_config.get("model_name", "Qwen/Qwen2.5-VL-7B-Instruct")
     timeout = local_config.get("timeout_sec", 120)
 
-    prompt = config["annotation"].get("screenshot_analysis_prompt") or config["annotation"].get("prompt", "")
+    prompt = prompt_override or config["annotation"].get("screenshot_analysis_prompt") or config["annotation"].get(
+        "prompt", ""
+    )
 
     logger.info(
         f"OpenAI-compatible vision: POST {base_url}/v1/chat/completions model={model_name} images={len(images)}"
@@ -266,15 +298,16 @@ def call_openai_vision(images: list[dict], config: dict) -> dict:
             {"type": "image_url", "image_url": {"url": f"data:{content_type};base64,{img['base64_data']}"}}
         )
 
-    response = requests.post(
-        f"{base_url}/v1/chat/completions",
-        json={
-            "model": model_name,
-            "messages": [{"role": "user", "content": content_parts}],
-            "max_tokens": 512,
-        },
-        timeout=timeout,
-    )
+    with _inference_lock:
+        response = requests.post(
+            f"{base_url}/v1/chat/completions",
+            json={
+                "model": model_name,
+                "messages": [{"role": "user", "content": content_parts}],
+                "max_tokens": 512,
+            },
+            timeout=timeout,
+        )
     response.raise_for_status()
     data = response.json()
 
@@ -334,8 +367,15 @@ def call_openai_text(
 # ---------------------------------------------------------------------------
 
 
-def call_vision_api(images: list[dict], config: dict) -> dict:
+def call_vision_api(
+    images: list[dict], config: dict, prompt_override: str | None = None
+) -> dict:
     """Route a vision (image summarization) call to the configured backend.
+
+    Args:
+        images: List of image dicts with base64_data and content_type
+        config: Configuration dictionary
+        prompt_override: If set, use this prompt instead of the one in config
 
     Returns:
         {"summary": str, "sources": list}
@@ -344,9 +384,9 @@ def call_vision_api(images: list[dict], config: dict) -> dict:
     logger.info(f"Vision API provider: {provider}")
 
     if provider == "ollama":
-        return call_ollama_vision(images, config)
+        return call_ollama_vision(images, config, prompt_override=prompt_override)
     if provider == "openai_compatible":
-        return call_openai_vision(images, config)
+        return call_openai_vision(images, config, prompt_override=prompt_override)
     raise ValueError(f"Unknown vision provider: {provider}")
 
 

@@ -4,18 +4,21 @@ from __future__ import annotations
 
 import argparse
 import base64
+import json
 import logging
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from chronometry.common import format_date, get_daily_dir, get_json_path, load_config, save_json
+from chronometry.common import format_date, get_daily_dir, get_json_path, load_config, load_json, save_json
 from chronometry.llm_backends import call_text_api, call_vision_api
 from chronometry.token_usage import TokenUsageTracker
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+MAX_CONTEXT_WORDS = 400
 
 
 def encode_image_to_base64(image_path: Path) -> str:
@@ -24,13 +27,97 @@ def encode_image_to_base64(image_path: Path) -> str:
         return base64.b64encode(image_file.read()).decode("utf-8")
 
 
-def call_vision_api_with_retry(images: list[dict], config: dict, max_retries: int = 3) -> dict:
+def get_recent_summaries(frame_dir: Path, current_stem: str, n: int = 3) -> str:
+    """Load the last n annotation summaries before the current frame.
+
+    If the current day's directory has fewer than n prior annotations,
+    the previous day's directory is checked to fill the gap (handles
+    the first-frame-of-the-day edge case).
+
+    Returns a bullet-list string, truncated to MAX_CONTEXT_WORDS words.
+    """
+    json_files = sorted(
+        f for f in frame_dir.glob("*.json")
+        if not f.stem.endswith("_meta") and f.stem < current_stem
+    )
+
+    if len(json_files) < n:
+        try:
+            yesterday = datetime.strptime(frame_dir.name, "%Y-%m-%d") - timedelta(days=1)
+            prev_dir = frame_dir.parent / yesterday.strftime("%Y-%m-%d")
+            if prev_dir.is_dir():
+                prev_files = sorted(
+                    f for f in prev_dir.glob("*.json")
+                    if not f.stem.endswith("_meta")
+                )
+                needed = n - len(json_files)
+                json_files = prev_files[-needed:] + json_files
+        except (ValueError, OSError):
+            pass
+
+    recent = json_files[-n:] if len(json_files) >= n else json_files
+
+    bullets: list[str] = []
+    for jf in recent:
+        try:
+            data = load_json(jf)
+            summary = data.get("summary", "")
+            if isinstance(summary, dict):
+                summary = json.dumps(summary, ensure_ascii=False)
+            if summary:
+                bullets.append(f"- {summary[:200]}")
+        except Exception:
+            continue
+
+    text = "\n".join(bullets)
+    words = text.split()
+    if len(words) > MAX_CONTEXT_WORDS:
+        text = " ".join(words[:MAX_CONTEXT_WORDS]) + "..."
+    return text
+
+
+def build_prompt(config: dict, metadata: dict | None = None, recent_context: str = "") -> str:
+    """Build the final VLM prompt by injecting metadata and recent context.
+
+    Replaces {metadata_block} and {recent_context} placeholders in the
+    configured prompt template.
+    """
+    template = config["annotation"].get("screenshot_analysis_prompt", "")
+
+    if metadata:
+        lines = []
+        if metadata.get("active_app"):
+            lines.append(f"Active app: {metadata['active_app']}")
+        if metadata.get("window_title"):
+            lines.append(f"Window title: {metadata['window_title']}")
+        if metadata.get("url"):
+            lines.append(f"URL: {metadata['url']}")
+        if metadata.get("workspace"):
+            lines.append(f"Workspace: {metadata['workspace']}")
+        metadata_block = "OS Context:\n" + "\n".join(lines) if lines else ""
+    else:
+        metadata_block = ""
+
+    if recent_context:
+        recent_block = "Recent context:\n" + recent_context
+    else:
+        recent_block = ""
+
+    prompt = template.replace("{metadata_block}", metadata_block)
+    prompt = prompt.replace("{recent_context}", recent_block)
+    return prompt.strip()
+
+
+def call_vision_api_with_retry(
+    images: list[dict], config: dict, max_retries: int = 3, prompt_override: str | None = None
+) -> dict:
     """Call the configured vision API with retry logic and exponential backoff.
 
     Args:
         images: List of image dictionaries with base64_data
         config: Configuration dictionary
         max_retries: Maximum number of retry attempts
+        prompt_override: If set, use this prompt instead of the one in config
 
     Returns:
         API response dictionary with 'summary' and 'sources' fields
@@ -40,7 +127,7 @@ def call_vision_api_with_retry(images: list[dict], config: dict, max_retries: in
     """
     for attempt in range(max_retries):
         try:
-            return call_vision_api(images, config)
+            return call_vision_api(images, config, prompt_override=prompt_override)
         except Exception as e:
             if attempt == max_retries - 1:
                 logger.error(f"Vision API call failed after {max_retries} attempts: {e}")
@@ -115,12 +202,19 @@ def process_batch(image_paths: list[Path], config: dict):
     annotation_config = config["annotation"]
     json_suffix = annotation_config.get("json_suffix", ".json")
 
-    # Prepare image data for API
+    # Prepare image data for API (prefer downscaled inference JPEG)
     images = []
     for idx, image_path in enumerate(image_paths):
         try:
-            base64_data = encode_image_to_base64(image_path)
-            images.append({"name": f"frame{idx}", "content_type": "image/png", "base64_data": base64_data})
+            inference_path = image_path.with_name(image_path.stem + "_inference.jpg")
+            if inference_path.exists():
+                path_to_encode = inference_path
+                content_type = "image/jpeg"
+            else:
+                path_to_encode = image_path
+                content_type = "image/png"
+            base64_data = encode_image_to_base64(path_to_encode)
+            images.append({"name": f"frame{idx}", "content_type": content_type, "base64_data": base64_data})
         except Exception as e:
             logger.error(f"Failed to encode image {image_path}: {e}")
             continue
@@ -129,9 +223,22 @@ def process_batch(image_paths: list[Path], config: dict):
         logger.error("No images to process in batch")
         return
 
+    # V2: Build prompt with metadata and recent context
+    first_image = image_paths[0]
+    metadata = None
+    meta_path = first_image.with_name(first_image.stem + "_meta.json")
+    if meta_path.exists():
+        try:
+            metadata = load_json(meta_path)
+        except Exception:
+            pass
+
+    recent_context = get_recent_summaries(first_image.parent, first_image.stem)
+    prompt_override = build_prompt(config, metadata=metadata, recent_context=recent_context)
+
     try:
         logger.info(f"Calling vision API with {len(images)} images...")
-        result = call_vision_api_with_retry(images, config)
+        result = call_vision_api_with_retry(images, config, prompt_override=prompt_override)
 
         # Get the raw summary
         raw_summary = result.get("summary", "")
@@ -149,22 +256,29 @@ def process_batch(image_paths: list[Path], config: dict):
                 logger.info("Summary formatting disabled in config")
             summary_to_save = raw_summary
 
-        # Save results
-        # Assuming API returns a single summary for the batch
-        # Save the same summary for each image in the batch
         for image_path in image_paths:
             json_path = get_json_path(image_path, json_suffix)
 
-            # Create result structure
+            inference_jpg = image_path.with_name(image_path.stem + "_inference.jpg")
+            meta_json = image_path.with_name(image_path.stem + "_meta.json")
+
+            frame_metadata = None
+            if meta_json.exists():
+                try:
+                    frame_metadata = load_json(meta_json)
+                except Exception:
+                    pass
+
             json_data = {
                 "timestamp": image_path.stem,
                 "image_file": image_path.name,
+                "inference_image": inference_jpg.name if inference_jpg.exists() else None,
+                "metadata": frame_metadata,
                 "summary": summary_to_save,
                 "sources": result.get("sources", []),
                 "batch_size": len(image_paths),
             }
 
-            # Save JSON using helper
             save_json(json_path, json_data)
             logger.info(f"Saved annotation: {json_path.name}")
 
@@ -184,6 +298,9 @@ def annotate_frames(config: dict, date: datetime = None) -> int:
     root_dir = config["root_dir"]
     annotation_config = config["annotation"]
     batch_size = annotation_config.get("screenshot_analysis_batch_size", 1)
+    if batch_size > 1:
+        logger.warning(f"screenshot_analysis_batch_size={batch_size} exceeds V2 single-image limit; clamping to 1")
+        batch_size = 1
     json_suffix = annotation_config.get("json_suffix", ".json")
 
     # Get directory for the date

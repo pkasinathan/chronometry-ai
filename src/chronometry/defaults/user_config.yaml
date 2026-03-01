@@ -6,9 +6,24 @@ capture:
 annotation:
   annotation_mode: manual
   annotation_interval_hours: 4
-  screenshot_analysis_batch_size: 4
-  screenshot_analysis_prompt: >
-    What is shown in this screenshot? Describe the work activity briefly.
+  screenshot_analysis_batch_size: 1
+  inference_image_max_edge: 1280
+  inference_image_quality: 80
+  screenshot_analysis_prompt: |
+    You are a productivity logger.
+
+    {metadata_block}
+
+    {recent_context}
+
+    Extract from this screenshot:
+    1. Active application
+    2. What I am working on
+    3. Type of task (coding, analysis, browsing, meeting, etc.)
+    4. Specific artifact (file, repo, table, URL)
+    5. Intended next step (inferred)
+
+    Respond in compact JSON only. No explanation.
   rewrite_screenshot_analysis_format_summary: false
   rewrite_screenshot_analysis_prompt: ''
 

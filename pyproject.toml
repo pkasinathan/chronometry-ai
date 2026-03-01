@@ -27,7 +27,6 @@ dependencies = [
     "pandas>=2.2.1",
     "pillow>=10.4.0",
     "plotly>=5.20.0",
-    "pynput>=1.7.6",
     "python-socketio>=5.10.0",
     "PyYAML>=6.0.1",
     "requests>=2.31.0",

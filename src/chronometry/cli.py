@@ -431,7 +431,7 @@ def logs(
     service: str | None = typer.Argument(None, help="Service name (omit for all)"),
     lines: int = typer.Option(50, "-n", "--lines", help="Number of lines"),
     follow: bool = typer.Option(False, "-f", "--follow", help="Follow log output"),
-    errors: bool = typer.Option(False, "-e", "--errors", help="Show error logs"),
+    stdout: bool = typer.Option(False, "--stdout", help="Show stdout logs instead of application logs"),
 ):
     """View service logs."""
     if service and service not in SERVICES:
@@ -439,7 +439,7 @@ def logs(
         raise typer.Exit(1)
 
     names = [service] if service else list(SERVICES)
-    suffix = ".error.log" if errors else ".log"
+    suffix = ".log" if stdout else ".error.log"
     log_files = []
     for name in names:
         log_path = LOGS_DIR / f"{SERVICES[name]['log']}{suffix}"
@@ -606,7 +606,7 @@ def stats():
     for date_dir in sorted(frames_dir.iterdir()):
         if not date_dir.is_dir():
             continue
-        total_frames += len(list(date_dir.glob("*.json")))
+        total_frames += len([f for f in date_dir.glob("*.json") if not f.stem.endswith("_meta")])
         annotations = load_annotations(date_dir)
         if annotations:
             activities = group_activities(annotations, config=config)
@@ -639,7 +639,7 @@ def dates():
     for date_dir in sorted(frames_dir.iterdir(), reverse=True):
         if not date_dir.is_dir():
             continue
-        n = len(list(date_dir.glob("*.json")))
+        n = len([f for f in date_dir.glob("*.json") if not f.stem.endswith("_meta")])
         pngs = len(list(date_dir.glob("*.png")))
         table.add_row(date_dir.name, f"{n} annotated / {pngs} captured")
 

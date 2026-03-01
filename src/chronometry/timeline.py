@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
 from collections import defaultdict
 from datetime import datetime
@@ -13,6 +14,35 @@ from chronometry.common import ensure_dir, format_date, get_daily_dir, load_conf
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+
+def extract_summary_text(summary_field) -> str:
+    """Extract a human-readable string from a summary field.
+
+    Handles both V1 plain-text summaries and V2 structured JSON summaries.
+    """
+    if not summary_field:
+        return ""
+    if isinstance(summary_field, dict):
+        parts = []
+        if summary_field.get("application"):
+            parts.append(summary_field["application"])
+        if summary_field.get("activity"):
+            parts.append(summary_field["activity"])
+        if summary_field.get("task_type"):
+            parts.append(f"[{summary_field['task_type']}]")
+        if summary_field.get("artifact"):
+            parts.append(summary_field["artifact"])
+        return " - ".join(parts) if parts else str(summary_field)
+    if isinstance(summary_field, str):
+        try:
+            parsed = json.loads(summary_field)
+            if isinstance(parsed, dict):
+                return extract_summary_text(parsed)
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return summary_field
+    return str(summary_field)
 
 
 def deduplicate_batch_annotations(annotations: list[dict]) -> list[dict]:
@@ -60,7 +90,10 @@ def load_annotations(daily_dir: Path, json_suffix: str = ".json") -> list[dict]:
     """Load all JSON annotations from a daily directory."""
     annotations = []
 
-    json_files = sorted(daily_dir.glob(f"*{json_suffix}"))
+    json_files = sorted(
+        f for f in daily_dir.glob(f"*{json_suffix}")
+        if not f.stem.endswith("_meta")
+    )
 
     for json_path in json_files:
         try:
@@ -95,9 +128,10 @@ def load_annotations(daily_dir: Path, json_suffix: str = ".json") -> list[dict]:
     return annotations
 
 
-def categorize_activity(summary: str) -> tuple[str, str, str]:
+def categorize_activity(summary) -> tuple[str, str, str]:
     """Categorize activity based on summary and return (category, icon, color)."""
-    summary_lower = summary.lower()
+    summary_text = extract_summary_text(summary)
+    summary_lower = summary_text.lower()
 
     # Define category patterns with color variations
     categories = {
@@ -185,12 +219,12 @@ def group_activities(annotations: list[dict], gap_minutes: int = None, config: d
     current_activity = None
 
     for annotation in sorted(annotations, key=lambda x: x["datetime"]):
-        category, icon, color = categorize_activity(annotation.get("summary", ""))
+        raw_summary = annotation.get("summary", "")
+        category, icon, color = categorize_activity(raw_summary)
+        display_summary = extract_summary_text(raw_summary) or "No summary"
 
-        # Check if this annotation has multiple frames (from batch deduplication)
         all_frames = annotation.get("all_frames", [annotation])
 
-        # Calculate the time range for all frames in the batch
         if len(all_frames) > 1:
             frame_times = [f["datetime"] for f in all_frames]
             batch_start_time = min(frame_times)
@@ -199,7 +233,6 @@ def group_activities(annotations: list[dict], gap_minutes: int = None, config: d
             batch_start_time = annotation["datetime"]
             batch_end_time = annotation["datetime"]
 
-        # Start new activity or continue current one
         if current_activity is None:
             current_activity = {
                 "start_time": batch_start_time,
@@ -207,20 +240,18 @@ def group_activities(annotations: list[dict], gap_minutes: int = None, config: d
                 "category": category,
                 "icon": icon,
                 "color": color,
-                "summary": annotation.get("summary", "No summary"),
-                "frames": all_frames,  # Include all frames from the batch
-                "summaries": [annotation.get("summary", "No summary")],
+                "summary": display_summary,
+                "frames": all_frames,
+                "summaries": [display_summary],
             }
         else:
             time_diff = (batch_start_time - current_activity["end_time"]).total_seconds() / 60
 
-            # Same category and within gap threshold - extend activity
             if category == current_activity["category"] and time_diff <= gap_minutes:
                 current_activity["end_time"] = max(current_activity["end_time"], batch_end_time)
-                current_activity["frames"].extend(all_frames)  # Add all frames from batch
-                current_activity["summaries"].append(annotation.get("summary", "No summary"))
+                current_activity["frames"].extend(all_frames)
+                current_activity["summaries"].append(display_summary)
             else:
-                # Save current activity and start new one
                 activities.append(current_activity)
                 current_activity = {
                     "start_time": batch_start_time,
@@ -228,9 +259,9 @@ def group_activities(annotations: list[dict], gap_minutes: int = None, config: d
                     "category": category,
                     "icon": icon,
                     "color": color,
-                    "summary": annotation.get("summary", "No summary"),
-                    "frames": all_frames,  # Include all frames from the batch
-                    "summaries": [annotation.get("summary", "No summary")],
+                    "summary": display_summary,
+                    "frames": all_frames,
+                    "summaries": [display_summary],
                 }
 
     # Add last activity

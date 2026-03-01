@@ -6,6 +6,7 @@ import logging
 import subprocess
 import time
 from datetime import datetime
+from pathlib import Path
 
 import mss
 from PIL import Image
@@ -27,6 +28,38 @@ from chronometry.common import (
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+
+def downscale_for_inference(image_path: Path, max_edge: int = 1280, quality: int = 80) -> Path:
+    """Create a downscaled JPEG copy of a screenshot for VLM inference.
+
+    The original PNG is never modified or deleted.
+
+    Args:
+        image_path: Path to the original PNG screenshot
+        max_edge: Maximum length of the longest edge in pixels
+        quality: JPEG quality (1-100)
+
+    Returns:
+        Path to the downscaled JPEG file
+    """
+    inference_path = image_path.with_name(image_path.stem + "_inference.jpg")
+    try:
+        with Image.open(image_path) as img:
+            width, height = img.size
+            longest = max(width, height)
+            if longest > max_edge:
+                scale = max_edge / longest
+                new_size = (int(width * scale), int(height * scale))
+                img = img.resize(new_size, Image.LANCZOS)
+            img = img.convert("RGB")
+            img.save(str(inference_path), "JPEG", quality=quality)
+            saved_size = img.size
+        logger.info(f"Inference image: {inference_path.name} ({saved_size[0]}x{saved_size[1]})")
+    except Exception as e:
+        logger.warning(f"Failed to create inference image: {e}")
+        return image_path
+    return inference_path
 
 
 def is_screen_locked() -> bool:
@@ -278,6 +311,20 @@ def capture_region_interactive(config: dict, show_notifications: bool = True) ->
 
             logger.info(f"Captured region: {frame_path.name}")
 
+            annotation_config = config.get("annotation", {})
+            max_edge = annotation_config.get("inference_image_max_edge", 1280)
+            quality = annotation_config.get("inference_image_quality", 80)
+            downscale_for_inference(frame_path, max_edge=max_edge, quality=quality)
+
+            try:
+                from chronometry.os_metadata import capture_metadata
+
+                metadata = capture_metadata()
+                meta_path = frame_path.with_name(frame_path.stem + "_meta.json")
+                save_json(meta_path, metadata)
+            except Exception as meta_err:
+                logger.warning(f"OS metadata capture failed: {meta_err}")
+
             if show_notifications:
                 show_notification("Chronometry", NotificationMessages.REGION_SAVED.format(filename=frame_path.name))
 
@@ -369,6 +416,22 @@ def capture_single_frame(config: dict, show_notifications: bool = True) -> bool:
 
             logger.info(f"Captured: {frame_path.name}")
 
+            # V2: Create downscaled inference image (original PNG is kept)
+            annotation_config = config.get("annotation", {})
+            max_edge = annotation_config.get("inference_image_max_edge", 1280)
+            quality = annotation_config.get("inference_image_quality", 80)
+            downscale_for_inference(frame_path, max_edge=max_edge, quality=quality)
+
+            # V2: Capture OS metadata
+            try:
+                from chronometry.os_metadata import capture_metadata
+
+                metadata = capture_metadata()
+                meta_path = frame_path.with_name(frame_path.stem + "_meta.json")
+                save_json(meta_path, metadata)
+            except Exception as meta_err:
+                logger.warning(f"OS metadata capture failed: {meta_err}")
+
             if show_notifications:
                 show_notification("Chronometry", NotificationMessages.SCREENSHOT_SAVED.format(filename=frame_path.name))
 
@@ -390,6 +453,7 @@ def capture_iteration(
     pre_notify_enabled: bool,
     pre_notify_seconds: int,
     pre_notify_sound: bool,
+    config: dict | None = None,
 ) -> dict:
     """Execute one iteration of the capture loop.
 
@@ -402,6 +466,7 @@ def capture_iteration(
         pre_notify_enabled: Whether pre-capture notifications are enabled
         pre_notify_seconds: Seconds to wait after pre-notification
         pre_notify_sound: Whether to play sound with pre-notification
+        config: Full configuration dict (optional, for inference image settings)
 
     Returns:
         dict with keys:
@@ -472,6 +537,25 @@ def capture_iteration(
         img.save(str(frame_path), "PNG")
 
         logger.info(f"Captured: {frame_path.name}")
+
+        # V2: Create downscaled inference image (original PNG is kept)
+        ann_cfg = (config or {}).get("annotation", {})
+        downscale_for_inference(
+            frame_path,
+            max_edge=ann_cfg.get("inference_image_max_edge", 1280),
+            quality=ann_cfg.get("inference_image_quality", 80),
+        )
+
+        # V2: Capture OS metadata
+        try:
+            from chronometry.os_metadata import capture_metadata
+
+            metadata = capture_metadata()
+            meta_path = frame_path.with_name(frame_path.stem + "_meta.json")
+            save_json(meta_path, metadata)
+        except Exception as meta_err:
+            logger.warning(f"OS metadata capture failed: {meta_err}")
+
         result["status"] = "captured"
         result["frame_path"] = frame_path
         return result
@@ -562,6 +646,7 @@ def capture_screen(config: dict):
                         pre_notify_enabled=pre_notify_enabled,
                         pre_notify_seconds=pre_notify_seconds,
                         pre_notify_sound=pre_notify_sound,
+                        config=config,
                     )
 
                     # Handle result

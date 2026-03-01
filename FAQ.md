@@ -107,7 +107,7 @@ The dashboard is available at **http://localhost:8051**.
 | `chrono service restart [name]` | Restart services |
 | `chrono service uninstall [name]` | Uninstall services from launchd |
 | `chrono service list` | List services and their status |
-| `chrono logs [name] [-f] [-e] [-n N]` | View service logs (`-f` follow, `-e` errors, `-n` lines) |
+| `chrono logs [name] [-f] [--stdout] [-n N]` | View service logs (`-f` follow, `--stdout` for stdout logs, `-n` lines) |
 | `chrono annotate [-d DATE]` | Run annotation on unannotated frames |
 | `chrono timeline` | Generate timeline visualization |
 | `chrono digest [-d DATE] [-f]` | Show or generate daily digest (`-f` force regenerate) |
@@ -143,9 +143,13 @@ Screenshots are saved under `~/.chronometry/data/frames/`, organized by date:
 ```
 ~/.chronometry/data/frames/
 ├── 2026-02-28/
-│   ├── 20260228_143000.png
-│   ├── 20260228_143000.json
+│   ├── 20260228_143000.png              # Original full-resolution screenshot
+│   ├── 20260228_143000_inference.jpg    # Downscaled JPEG (1280px) for VLM
+│   ├── 20260228_143000_meta.json        # OS metadata (active app, title, URL)
+│   ├── 20260228_143000.json             # AI annotation
 │   ├── 20260228_144500.png
+│   ├── 20260228_144500_inference.jpg
+│   ├── 20260228_144500_meta.json
 │   └── 20260228_144500.json
 └── 2026-02-27/
     └── ...
@@ -153,7 +157,28 @@ Screenshots are saved under `~/.chronometry/data/frames/`, organized by date:
 
 ### What is the file naming convention?
 
-Screenshots use the format `YYYYMMDD_HHMMSS.png` (e.g. `20260228_143000.png`). Annotation JSON files use the same base name with a `.json` extension.
+Each capture creates up to four files with the same `YYYYMMDD_HHMMSS` base name:
+
+| File | Description |
+|------|-------------|
+| `.png` | Original full-resolution screenshot (kept for archival) |
+| `_inference.jpg` | Downscaled JPEG (longest edge 1280px, quality 80) used for VLM inference |
+| `_meta.json` | OS metadata captured at screenshot time (active app, window title, URL, workspace) |
+| `.json` | AI annotation with summary, metadata reference, and inference image path |
+
+### What is the _inference.jpg file?
+
+Every screenshot is automatically downscaled to a JPEG with the longest edge at 1280 pixels (configurable via `inference_image_max_edge`). This dramatically reduces memory usage during VLM inference while preserving enough detail for activity recognition. The original full-resolution PNG is always kept for archival — you can use it later for re-analysis or higher-quality processing.
+
+### What is OS metadata capture?
+
+At each screenshot, Chronometry uses macOS AppleScript to capture:
+- **Active application** — the frontmost app (e.g. "Cursor", "Google Chrome")
+- **Window title** — the title of the front window
+- **Browser URL** — the URL of Chrome's active tab (only when Chrome is frontmost)
+- **Workspace path** — inferred from the window title (file paths or project names)
+
+This metadata is saved as `_meta.json` and injected into the VLM prompt, reducing the model's reliance on pixel-level inference for basic context.
 
 ### Can I capture from a specific monitor?
 
@@ -262,7 +287,7 @@ This allows the timeline to show that time was spent in a meeting even though no
 
 ### How does annotation work?
 
-Chronometry sends screenshot images to a local vision model (Ollama by default) which analyzes what's on screen and produces a text summary. The summary and metadata are saved as a JSON file alongside the PNG.
+Chronometry sends a downscaled JPEG (1280px) to a local vision model (Ollama by default) along with OS metadata (active app, window title, URL) and recent context (last 2-3 summaries). The model produces a structured JSON summary with application, activity, task type, artifact, and next step. The result is saved as a JSON file alongside the original PNG.
 
 ### What is the difference between auto and manual annotation mode?
 
@@ -279,24 +304,40 @@ annotation:
   annotation_interval_hours: 4       # interval for auto mode
 ```
 
-### How are screenshots batched for annotation?
+### How are screenshots processed for annotation?
 
-Screenshots are sent to the vision model in batches (default: 4 images per batch). The model receives all images at once and produces a combined description. Each image in the batch gets the same summary text in its JSON file.
+Each screenshot is processed individually (one image per inference call) to minimize memory usage and avoid swap storms. The downscaled inference JPEG, OS metadata, and last 2-3 annotation summaries are combined into a single prompt.
 
 ```yaml
 annotation:
-  screenshot_analysis_batch_size: 4
+  screenshot_analysis_batch_size: 1   # Single image per inference (enforced)
+  inference_image_max_edge: 1280      # Downscale longest edge
+  inference_image_quality: 80         # JPEG quality
 ```
 
 Yesterday's unannotated frames are processed first, then today's, in chronological order.
 
 ### Can I customize the analysis prompt?
 
-Yes. Edit the `screenshot_analysis_prompt` field in `user_config.yaml`:
+Yes. Edit the `screenshot_analysis_prompt` field in `user_config.yaml`. The default V2 prompt requests structured JSON output and includes `{metadata_block}` and `{recent_context}` placeholders that are automatically filled at annotation time:
 
 ```yaml
 annotation:
-  screenshot_analysis_prompt: "What is shown in this screenshot? Describe the work activity briefly."
+  screenshot_analysis_prompt: |
+    You are a productivity logger.
+
+    {metadata_block}
+
+    {recent_context}
+
+    Extract from this screenshot:
+    1. Active application
+    2. What I am working on
+    3. Type of task (coding, analysis, browsing, meeting, etc.)
+    4. Specific artifact (file, repo, table, URL)
+    5. Intended next step (inferred)
+
+    Respond in compact JSON only. No explanation.
 ```
 
 ### What LLM backends are supported?
@@ -555,26 +596,21 @@ Go to the **Settings** tab. Changes are saved to `user_config.yaml` (a backup is
 
 The hotkey uses a macOS Quartz `CGEventTap` to listen for the key combination globally. When pressed, it triggers interactive region capture — a crosshair appears and you can select a screen area or window to capture. The screenshot is saved to the current date's frames folder.
 
-The hotkey requires **Accessibility permission** for the Python binary running the menu bar app.
+The hotkey requires **Accessibility permission** for Chronometry. On first install, macOS prompts you to grant it.
 
 ### Why is the Cmd+Shift+6 hotkey not working?
 
 This is almost always an Accessibility permission issue. See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for the full guide. Quick summary:
 
-1. Find the actual binary: `ps aux | grep "[c]hronometry.menubar"`
-2. On Python 3.14+, the running binary may differ from the venv path — verify with:
-   ```bash
-   PID=$(launchctl list user.chronometry.menubar 2>/dev/null | awk '/PID/{gsub(/[^0-9]/,""); print}')
-   ps -p "$PID" -o comm=
-   ```
-3. Add that exact binary to **System Settings > Privacy & Security > Accessibility**
+1. Open **System Settings > Privacy & Security > Accessibility**
+2. Find **Chronometry** and toggle it **ON**
+3. If not listed, add `~/.chronometry/Chronometry.app` manually
 4. The hotkey works immediately — check the log for `Global hotkey registered: Cmd+Shift+6 for Region Capture (CGEventTap)`
 
 Common causes:
-- Python was upgraded and the binary path changed
-- The virtual environment was recreated
+- First install — Accessibility prompt was dismissed or denied
+- Python was upgraded or venv recreated — run `chrono service install` to rebuild the app bundle
 - macOS update reset privacy permissions
-- Permission was granted to `python3.x` but the actual process runs as `Python.app` (common with Python 3.14+)
 
 ### Can I pause capture temporarily?
 
@@ -637,10 +673,10 @@ This shows each service's status (running/stopped), PID, and Ollama availability
 ### How do I view service logs?
 
 ```bash
-chrono logs                    # Last 50 lines from all services
+chrono logs                    # Last 50 lines from all services (error logs)
 chrono logs menubar            # Menu bar logs only
 chrono logs -f                 # Follow (tail -f) all logs
-chrono logs -e                 # Error logs
+chrono logs --stdout           # Stdout logs (instead of default error logs)
 chrono logs -n 100 menubar     # Last 100 lines of menu bar log
 ```
 
@@ -685,8 +721,10 @@ The capture loop also has internal protection — after 5 consecutive capture er
 | | `retention_days` | `1095` | Days to keep data (~3 years) |
 | **annotation** | `annotation_mode` | `"manual"` | `"manual"` or `"auto"` |
 | | `annotation_interval_hours` | `4` | Hours between auto-annotation runs |
-| | `screenshot_analysis_batch_size` | `4` | Images per annotation batch |
-| | `screenshot_analysis_prompt` | *(see config)* | Prompt sent to the vision model |
+| | `screenshot_analysis_batch_size` | `1` | Images per inference call (single-image enforced) |
+| | `inference_image_max_edge` | `1280` | Max longest edge (px) for downscaled inference JPEG |
+| | `inference_image_quality` | `80` | JPEG quality for inference image |
+| | `screenshot_analysis_prompt` | *(see config)* | Structured prompt with metadata/context placeholders |
 | | `rewrite_screenshot_analysis_format_summary` | `false` | Post-process summaries with text LLM |
 | **digest** | `interval_seconds` | `3600` | Digest regeneration interval |
 | **timeline** | `bucket_minutes` | `30` | Timeline bucket size |
@@ -757,10 +795,12 @@ Everything is under `~/.chronometry/` (or the path set by `CHRONOMETRY_HOME`):
 │   ├── system_config.yaml
 │   └── backup/                      # Config backups
 ├── data/
-│   ├── frames/                      # Screenshots by date
+│   ├── frames/                              # Screenshots by date
 │   │   └── YYYY-MM-DD/
-│   │       ├── YYYYMMDD_HHMMSS.png  # Screenshot image
-│   │       └── YYYYMMDD_HHMMSS.json # AI annotation
+│   │       ├── YYYYMMDD_HHMMSS.png              # Original screenshot
+│   │       ├── YYYYMMDD_HHMMSS_inference.jpg    # Downscaled JPEG for VLM
+│   │       ├── YYYYMMDD_HHMMSS_meta.json        # OS metadata
+│   │       └── YYYYMMDD_HHMMSS.json             # AI annotation
 │   ├── digests/                     # Cached daily digests
 │   │   └── digest_YYYY-MM-DD.json
 │   └── token_usage/                 # LLM token tracking
@@ -856,7 +896,6 @@ make check     # Run lint + typecheck together
 | Pillow | Image processing |
 | pandas | Data handling |
 | plotly | Analytics charts |
-| pynput | Keyboard input (legacy, replaced by Quartz CGEventTap for hotkey) |
 | PyYAML | Configuration file parsing |
 | requests | HTTP client for LLM APIs |
 | rich | CLI formatting and tables |
