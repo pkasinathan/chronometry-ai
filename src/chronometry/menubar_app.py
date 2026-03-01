@@ -352,7 +352,7 @@ class ChronometryApp(rumps.App):
         annotation_mode = annotation_config.get("annotation_mode", "auto")
         interval_hours = annotation_config.get("annotation_interval_hours", 4)
         annotation_interval = interval_hours * 3600
-        batch_size = annotation_config.get("screenshot_analysis_batch_size", 4)
+        batch_size = annotation_config.get("screenshot_analysis_batch_size", 1)
 
         logger.info(f"Annotation mode: {annotation_mode}")
         if annotation_mode == "auto":
@@ -537,8 +537,7 @@ class ChronometryApp(rumps.App):
         """Setup global hotkey listener for Cmd+Shift+6.
 
         Uses a Quartz CGEventTap matching by virtual key code (VK_ANSI_6 = 22),
-        which is shift-invariant. pynput's HotKey class cannot match shifted
-        number keys because canonical() doesn't undo Shift+6 → '^'.
+        which is shift-invariant and does not require pynput.
         """
         from Quartz import (
             CFMachPortCreateRunLoopSource,

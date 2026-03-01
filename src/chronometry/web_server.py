@@ -129,7 +129,7 @@ def get_config():
                 "backend": config["annotation"].get("backend", "local"),
                 "annotation_mode": config["annotation"].get("annotation_mode", "auto"),
                 "annotation_interval_hours": config["annotation"].get("annotation_interval_hours", 4),
-                "screenshot_analysis_batch_size": config["annotation"].get("screenshot_analysis_batch_size", 4),
+                "screenshot_analysis_batch_size": config["annotation"].get("screenshot_analysis_batch_size", 1),
                 "rewrite_screenshot_analysis_format_summary": config["annotation"].get(
                     "rewrite_screenshot_analysis_format_summary", False
                 ),

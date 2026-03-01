@@ -30,7 +30,7 @@ class TestVisionRouting:
                 "local_model": {
                     "provider": "ollama",
                     "base_url": "http://localhost:11434",
-                    "model_name": "llava:7b",
+                    "model_name": "qwen2.5vl:7b",
                     "timeout_sec": 60,
                 },
             }

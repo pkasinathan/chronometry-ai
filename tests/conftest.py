@@ -41,7 +41,7 @@ def sample_config(tmp_path: Path) -> dict[str, Any]:
         "annotation": {
             "backend": "local",
             "annotation_mode": "manual",
-            "screenshot_analysis_batch_size": 4,
+            "screenshot_analysis_batch_size": 1,
             "json_suffix": ".json",
             "screenshot_analysis_prompt": "Describe the activity.",
             "local_model": {

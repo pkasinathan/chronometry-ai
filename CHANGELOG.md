@@ -4,6 +4,34 @@ All notable changes to Chronometry will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.7] - 2026-03-01
+
+### Added
+- **Inference downscaling**: Screenshots automatically downscaled to 1280px JPEG for VLM inference, reducing memory usage
+- **OS metadata capture**: AppleScript-based capture of active app, window title, browser URL, and workspace path
+- **Structured prompts**: VLM prompt specifies exact JSON keys (`application`, `activity`, `task_type`, `artifact`, `next_step`)
+- **Metadata badges**: Dashboard expanded frame view shows app, window title, URL, and workspace badges
+- **Cross-day context**: Annotation injects last 2-3 summaries from previous day for continuity
+- **Code fence stripping**: Timeline parser strips markdown ` ```json ``` ` wrappers from VLM output
+- **`chrono update` command**: Pull latest code and restart services for dev installs
+
+### Changed
+- Batch size clamped to 1 (single image per inference call) to prevent memory saturation
+- Inference lock (`threading.Lock`) serializes all VLM calls across Ollama and OpenAI backends
+- Both vision backends truncate to single image with warning if >1 passed
+- Default vision model fallback changed from `llava:7b` to `qwen2.5vl:7b`
+- `chrono logs` now shows error logs by default; use `--stdout` for stdout logs
+- YAML prompt uses `|` (literal scalar) instead of `>` (folded scalar) to preserve newlines
+- Dashboard loads tab-specific data on direct URL navigation (e.g. `/timeline`)
+
+### Fixed
+- `_meta.json` files excluded from all JSON globs (timeline, web server, CLI stats/dates)
+- `img.size` accessed safely inside PIL context manager in `downscale_for_inference`
+- Region capture (`Cmd+Shift+6`) now creates inference JPEG and metadata alongside PNG
+
+### Removed
+- `pynput` dependency (replaced by Quartz CGEventTap for hotkey handling)
+
 ## [1.0.3] - 2026-02-28
 
 ### Fixed
