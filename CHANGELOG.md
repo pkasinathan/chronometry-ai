@@ -4,6 +4,15 @@ All notable changes to Chronometry will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.3] - 2026-02-28
+
+### Fixed
+- Use `pip3` instead of `pip` in all install/uninstall instructions (README, FAQ)
+- Add Python version check with `brew install python@3.10` to README prerequisites
+
+### Added
+- Troubleshooting sections for `pip: command not found` and Python 3.10+ installation
+
 ## [1.0.2] - 2026-02-28
 
 ### Changed

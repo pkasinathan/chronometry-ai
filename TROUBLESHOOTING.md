@@ -1,5 +1,72 @@
 # Troubleshooting
 
+## `pip: command not found`
+
+### Symptoms
+
+- Running `pip install chronometry-ai` returns `pip: command not found` or `zsh: command not found: pip`
+
+### Cause
+
+Modern macOS (Homebrew Python 3.12+) and many Linux distributions no longer provide a bare `pip` command. Only `pip3` or `python3 -m pip` is available.
+
+### Fix
+
+Use `pip3` instead:
+
+```bash
+pip3 install chronometry-ai
+```
+
+Or use `python3 -m pip`:
+
+```bash
+python3 -m pip install chronometry-ai
+```
+
+---
+
+## Python 3.10+ not installed
+
+### Symptoms
+
+- `python3 --version` shows a version below 3.10, or `python3: command not found`
+- Installing chronometry fails with a Python version error
+
+### Fix
+
+Install Python 3.10+ via Homebrew (recommended on macOS):
+
+```bash
+brew install python@3.10
+```
+
+After installation, it's available as `python3.10` and `pip3.10`. Create a virtual environment:
+
+```bash
+python3.10 -m venv ~/.chronometry-venv
+source ~/.chronometry-venv/bin/activate
+pip install chronometry-ai
+```
+
+Alternatively, use **pyenv** to manage multiple Python versions:
+
+```bash
+brew install pyenv
+pyenv install 3.10
+pyenv global 3.10
+pip install chronometry-ai
+```
+
+Or use **uv** (fastest):
+
+```bash
+uv python install 3.10
+uv pip install chronometry-ai
+```
+
+---
+
 ## Cmd+Shift+6 hotkey not working
 
 ### Symptoms

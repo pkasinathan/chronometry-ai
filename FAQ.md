@@ -40,7 +40,7 @@ ollama pull qwen2.5vl:7b
 From PyPI:
 
 ```bash
-pip install chronometry-ai
+pip3 install chronometry-ai
 ```
 
 Or with uv:
@@ -808,7 +808,7 @@ To completely remove Chronometry:
 ```bash
 chrono service uninstall
 rm -rf ~/.chronometry
-pip uninstall chronometry-ai
+pip3 uninstall chronometry-ai
 ```
 
 ---

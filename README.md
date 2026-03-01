@@ -63,7 +63,10 @@ Chronometry captures periodic screenshots of your desktop, annotates them with a
 ### Prerequisites
 
 - **macOS** (menu bar app uses macOS-specific APIs)
-- **Python 3.10+**
+- **Python 3.10+** — check with `python3 --version`. If below 3.10, install it:
+  ```bash
+  brew install python@3.10
+  ```
 - **Ollama** — local LLM runtime
 
 ```bash
@@ -81,7 +84,7 @@ ollama pull qwen2.5vl:7b
 
 ```bash
 # From PyPI
-pip install chronometry-ai
+pip3 install chronometry-ai
 
 # Or with uv
 uv pip install chronometry-ai
