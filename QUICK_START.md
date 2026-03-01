@@ -33,7 +33,7 @@ This creates `~/.chronometry/` with default configuration files.
 chrono service install
 ```
 
-macOS will prompt **"Chronometry" would like to control this computer using accessibility features**. Click **Open System Settings**, toggle **Chronometry** on, then run `chrono service restart menubar`.
+macOS will prompt **"Chronometry" would like to control this computer using accessibility features**. Click **Open System Settings** and toggle **Chronometry** on.
 
 ## 5. Open Dashboard
 

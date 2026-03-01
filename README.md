@@ -131,7 +131,7 @@ chrono service start
 chrono open
 ```
 
-On first install, macOS will prompt **"Chronometry" would like to control this computer using accessibility features**. Click **Open System Settings**, toggle **Chronometry** on, then restart the service with `chrono service restart menubar`. This enables the Cmd+Shift+6 hotkey for region capture.
+On first install, macOS will prompt **"Chronometry" would like to control this computer using accessibility features**. Click **Open System Settings** and toggle **Chronometry** on. The Cmd+Shift+6 hotkey for region capture will work immediately.
 
 The dashboard is at **http://localhost:8051**.
 

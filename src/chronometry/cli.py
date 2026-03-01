@@ -336,7 +336,7 @@ def start(
         if not plist_path.exists():
             console.print(f"[yellow]{name}: not installed, installing…[/yellow]")
             _ensure_dirs()
-            _install_plist(name)
+        _install_plist(name)
         if _is_loaded(info["label"]):
             console.print(f"[yellow]{name}: already running[/yellow]")
             continue
@@ -380,9 +380,8 @@ def restart(
             subprocess.run(["launchctl", "unload", str(plist_path)], capture_output=True)
             console.print(f"  {name}: stopped")
         time.sleep(1)
-        if not plist_path.exists():
-            _ensure_dirs()
-            _install_plist(name)
+        _ensure_dirs()
+        _install_plist(name)
         subprocess.run(["launchctl", "load", str(plist_path)], capture_output=True)
         time.sleep(1)
         if _is_loaded(info["label"]):

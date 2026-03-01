@@ -96,13 +96,9 @@ Common triggers:
    - Click **+** (unlock with your password if needed)
    - Navigate to `~/.chronometry/Chronometry.app` and add it (press **Cmd+Shift+G** in the file dialog to type the path)
 
-#### Step 2: Restart the service
+The hotkey will work immediately after toggling the permission on — no restart needed.
 
-```bash
-chrono service restart menubar
-```
-
-#### Step 3: Verify
+#### Step 2: Verify
 
 Check the log to confirm the hotkey registered successfully:
 

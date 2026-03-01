@@ -79,7 +79,7 @@ Install as macOS services that auto-start at login:
 chrono service install
 ```
 
-On first install, macOS will prompt **"Chronometry" would like to control this computer using accessibility features**. Click **Open System Settings**, toggle **Chronometry** on, then restart the service with `chrono service restart menubar`. This enables the Cmd+Shift+6 hotkey.
+On first install, macOS will prompt **"Chronometry" would like to control this computer using accessibility features**. Click **Open System Settings** and toggle **Chronometry** on. The Cmd+Shift+6 hotkey will work immediately.
 
 Or start manually (without auto-start at login):
 
@@ -568,8 +568,7 @@ This is almost always an Accessibility permission issue. See [TROUBLESHOOTING.md
    ps -p "$PID" -o comm=
    ```
 3. Add that exact binary to **System Settings > Privacy & Security > Accessibility**
-4. Restart: `chrono service restart menubar`
-5. Check the log — you should see `Global hotkey registered: Cmd+Shift+6 for Region Capture (CGEventTap)`
+4. The hotkey works immediately — check the log for `Global hotkey registered: Cmd+Shift+6 for Region Capture (CGEventTap)`
 
 Common causes:
 - Python was upgraded and the binary path changed
@@ -613,7 +612,7 @@ chrono service install webserver  # Install only the web server
 
 This copies plist files to `~/Library/LaunchAgents/` and loads them into launchd. Services will auto-start at login.
 
-On first install, macOS will prompt you to grant Accessibility permission to **Chronometry**. Click **Open System Settings**, toggle **Chronometry** on, then run `chrono service restart menubar` to activate the Cmd+Shift+6 hotkey.
+On first install, macOS will prompt you to grant Accessibility permission to **Chronometry**. Click **Open System Settings** and toggle **Chronometry** on. The Cmd+Shift+6 hotkey will work immediately.
 
 ### How do I start, stop, and restart services?
 
