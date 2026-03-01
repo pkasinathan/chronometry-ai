@@ -1284,6 +1284,8 @@
                     await this.loadDigest();
                     await this.loadSettings();
                     this.initWebSocket();
+                    if (this.activeTab === 'timeline') this.loadTimelineByDate();
+                    else if (this.activeTab === 'analytics') this.$nextTick(() => this.loadAnalytics());
                 },
                 initWebSocket() {
                     this.socket = io();
