@@ -118,6 +118,73 @@ def _ensure_dirs():
     bootstrap()
 
 
+APP_BUNDLE_DIR = CHRONOMETRY_HOME / "Chronometry.app"
+
+_APP_INFO_PLIST = """\
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" \
+"http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Chronometry</string>
+    <key>CFBundleDisplayName</key>
+    <string>Chronometry</string>
+    <key>CFBundleIdentifier</key>
+    <string>user.chronometry.menubar</string>
+    <key>CFBundleVersion</key>
+    <string>{version}</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleExecutable</key>
+    <string>Chronometry</string>
+    <key>LSBackgroundOnly</key>
+    <true/>
+    <key>LSUIElement</key>
+    <true/>
+</dict>
+</plist>
+"""
+
+
+def _build_app_bundle() -> Path:
+    """Create a minimal Chronometry.app bundle so macOS Accessibility
+    identifies the process as 'Chronometry' instead of 'Python'.
+
+    Returns the path to the executable inside the bundle.
+    """
+    contents_dir = APP_BUNDLE_DIR / "Contents"
+    macos_dir = contents_dir / "MacOS"
+    macos_dir.mkdir(parents=True, exist_ok=True)
+
+    info_plist = contents_dir / "Info.plist"
+    info_plist.write_text(_APP_INFO_PLIST.format(version=__version__))
+
+    executable = macos_dir / "Chronometry"
+    src_python = Path(sys.executable).resolve()
+
+    if executable.exists() or executable.is_symlink():
+        executable.unlink()
+
+    try:
+        os.link(src_python, executable)
+    except OSError:
+        shutil.copy2(src_python, executable)
+
+    executable.chmod(0o755)
+
+    # The Python binary loads libpython via @executable_path/../lib/.
+    # Symlink the original lib directory so the dylib is found.
+    src_lib = src_python.parent.parent / "lib"
+    bundle_lib = contents_dir / "lib"
+    if bundle_lib.is_symlink() or bundle_lib.exists():
+        bundle_lib.unlink() if bundle_lib.is_symlink() else shutil.rmtree(bundle_lib)
+    if src_lib.is_dir():
+        bundle_lib.symlink_to(src_lib)
+
+    return executable
+
+
 def _install_plist(name: str):
     info = SERVICES[name]
     defaults = pkg_files("chronometry") / "defaults"
@@ -125,7 +192,34 @@ def _install_plist(name: str):
 
     LAUNCH_AGENTS_DIR.mkdir(parents=True, exist_ok=True)
     content = template_path.read_text()
-    content = content.replace("{{PYTHON_PATH}}", sys.executable)
+
+    if name == "menubar":
+        app_python = _build_app_bundle()
+        content = content.replace("{{PYTHON_PATH}}", str(app_python))
+        # The bundled binary loses venv context; build PYTHONPATH from
+        # venv site-packages + any .pth entries (editable installs).
+        import site as _site
+
+        site_pkgs = Path(_site.getsitepackages()[0])
+        paths = [str(site_pkgs)]
+        for pth in site_pkgs.glob("*.pth"):
+            for line in pth.read_text().splitlines():
+                line = line.strip()
+                if line and not line.startswith("#") and Path(line).is_dir():
+                    paths.append(line)
+        pythonpath_val = ":".join(paths)
+        pythonpath_entry = (
+            f"        <key>PYTHONPATH</key>\n"
+            f"        <string>{pythonpath_val}</string>\n"
+            f"    "
+        )
+        content = content.replace(
+            "    </dict>\n\n    <key>ProcessType</key>",
+            pythonpath_entry + "</dict>\n\n    <key>ProcessType</key>",
+        )
+    else:
+        content = content.replace("{{PYTHON_PATH}}", sys.executable)
+
     content = content.replace("{{CHRONOMETRY_HOME}}", str(CHRONOMETRY_HOME))
     dest = LAUNCH_AGENTS_DIR / info["plist"]
     dest.write_text(content)
@@ -316,6 +410,9 @@ def uninstall(
             console.print(f"[green]✓ {name}: uninstalled[/green]")
         else:
             console.print(f"[yellow]{name}: not installed[/yellow]")
+        if name == "menubar" and APP_BUNDLE_DIR.exists():
+            shutil.rmtree(APP_BUNDLE_DIR)
+            console.print("  Chronometry.app bundle removed")
     console.print(f"\n  Log files preserved in: {LOGS_DIR}")
 
 
