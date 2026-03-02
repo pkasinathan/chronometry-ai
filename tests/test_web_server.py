@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, Mock, mock_open, patch
 
 import pytest
 
-
 from chronometry.web_server import app, init_config
 
 
@@ -86,6 +85,7 @@ class TestDataEndpoints:
         assert data["status"] == "healthy"
         assert "timestamp" in data
         from chronometry import __version__
+
         assert data["version"] == __version__
 
     def test_get_config(self, client, setup_config):
@@ -434,8 +434,10 @@ class TestDatesEndpoint:
         date_dir_2.mkdir()
         (date_dir_2 / "20251102_100000.json").write_text("{}")
 
-        with patch("chronometry.web_server.config", {"root_dir": str(tmp_path)}), \
-             patch("chronometry.web_server.parse_date") as mock_parse:
+        with (
+            patch("chronometry.web_server.config", {"root_dir": str(tmp_path)}),
+            patch("chronometry.web_server.parse_date") as mock_parse,
+        ):
             mock_parse.side_effect = lambda d: datetime.strptime(d, "%Y-%m-%d")
             response = client.get("/api/dates")
 

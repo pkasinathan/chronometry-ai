@@ -36,20 +36,14 @@ def get_recent_summaries(frame_dir: Path, current_stem: str, n: int = 3) -> str:
 
     Returns a bullet-list string, truncated to MAX_CONTEXT_WORDS words.
     """
-    json_files = sorted(
-        f for f in frame_dir.glob("*.json")
-        if not f.stem.endswith("_meta") and f.stem < current_stem
-    )
+    json_files = sorted(f for f in frame_dir.glob("*.json") if not f.stem.endswith("_meta") and f.stem < current_stem)
 
     if len(json_files) < n:
         try:
             yesterday = datetime.strptime(frame_dir.name, "%Y-%m-%d") - timedelta(days=1)
             prev_dir = frame_dir.parent / yesterday.strftime("%Y-%m-%d")
             if prev_dir.is_dir():
-                prev_files = sorted(
-                    f for f in prev_dir.glob("*.json")
-                    if not f.stem.endswith("_meta")
-                )
+                prev_files = sorted(f for f in prev_dir.glob("*.json") if not f.stem.endswith("_meta"))
                 needed = n - len(json_files)
                 json_files = prev_files[-needed:] + json_files
         except (ValueError, OSError):

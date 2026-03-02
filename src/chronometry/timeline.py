@@ -104,10 +104,7 @@ def load_annotations(daily_dir: Path, json_suffix: str = ".json") -> list[dict]:
     """Load all JSON annotations from a daily directory."""
     annotations = []
 
-    json_files = sorted(
-        f for f in daily_dir.glob(f"*{json_suffix}")
-        if not f.stem.endswith("_meta")
-    )
+    json_files = sorted(f for f in daily_dir.glob(f"*{json_suffix}") if not f.stem.endswith("_meta"))
 
     for json_path in json_files:
         try:

@@ -6,7 +6,6 @@ import shutil
 import sys
 import tempfile
 from datetime import datetime, timedelta
-from pathlib import Path
 
 from chronometry import CHRONOMETRY_HOME, __version__
 
@@ -17,14 +16,18 @@ def run_validation(console=None):
     Args:
         console: Optional Rich Console for formatted output. Falls back to print().
     """
+
     def out(msg: str):
         if console:
             console.print(msg)
         else:
             print(msg)
 
-    out(f"[bold]Chronometry v{__version__} — System Validation[/bold]\n" if console else
-        f"Chronometry v{__version__} — System Validation\n")
+    out(
+        f"[bold]Chronometry v{__version__} — System Validation[/bold]\n"
+        if console
+        else f"Chronometry v{__version__} — System Validation\n"
+    )
 
     errors: list[str] = []
 
@@ -121,7 +124,7 @@ def run_validation(console=None):
     try:
         from chronometry.timeline import categorize_activity, format_duration
 
-        cat, icon, color = categorize_activity("Coding in Python")
+        cat, _icon, _color = categorize_activity("Coding in Python")
         out(f"  ✓ categorize_activity works ('{cat}')")
 
         start = datetime.now()

@@ -23,7 +23,6 @@ from chronometry.common import (
     NotificationMessages,
     calculate_compensated_sleep,
     count_unannotated_frames,
-    format_date,
     get_capture_config,
     get_notification_config,
     load_config,
@@ -553,20 +552,20 @@ class ChronometryApp(rumps.App):
             CGEventTapCreate,
             CGEventTapEnable,
             kCFRunLoopCommonModes,
-            kCGEventKeyDown,
             kCGEventFlagMaskCommand,
             kCGEventFlagMaskShift,
+            kCGEventKeyDown,
             kCGHeadInsertEventTap,
             kCGKeyboardEventKeycode,
             kCGSessionEventTap,
         )
 
-        VK_ANSI_6 = 22
+        vk_ansi_6 = 22
         required_flags = kCGEventFlagMaskCommand | kCGEventFlagMaskShift
 
         def tap_callback(proxy, event_type, event, refcon):
             keycode = CGEventGetIntegerValueField(event, kCGKeyboardEventKeycode)
-            if keycode == VK_ANSI_6:
+            if keycode == vk_ansi_6:
                 flags = CGEventGetFlags(event)
                 if (flags & required_flags) == required_flags:
                     logger.info("Hotkey Cmd+Shift+6 pressed - triggering region capture")

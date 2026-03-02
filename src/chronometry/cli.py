@@ -208,11 +208,7 @@ def _install_plist(name: str):
                 if line and not line.startswith("#") and Path(line).is_dir():
                     paths.append(line)
         pythonpath_val = ":".join(paths)
-        pythonpath_entry = (
-            f"        <key>PYTHONPATH</key>\n"
-            f"        <string>{pythonpath_val}</string>\n"
-            f"    "
-        )
+        pythonpath_entry = f"        <key>PYTHONPATH</key>\n        <string>{pythonpath_val}</string>\n    "
         content = content.replace(
             "    </dict>\n\n    <key>ProcessType</key>",
             pythonpath_entry + "</dict>\n\n    <key>ProcessType</key>",
@@ -756,7 +752,8 @@ def update():
     console.print("[cyan]Reinstalling package…[/cyan]")
     pip_result = subprocess.run(
         [sys.executable, "-m", "pip", "install", "-e", str(repo_dir), "-q"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if pip_result.returncode != 0:
         console.print(f"[bold red]pip install failed:[/bold red]\n{pip_result.stderr.strip()}")

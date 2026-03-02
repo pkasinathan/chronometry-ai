@@ -9,7 +9,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 from chronometry.token_usage import TokenUsageTracker
 
 

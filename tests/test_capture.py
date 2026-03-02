@@ -7,7 +7,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-
 from chronometry.capture import (
     capture_iteration,
     capture_region_interactive,

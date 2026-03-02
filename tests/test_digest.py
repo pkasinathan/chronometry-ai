@@ -8,7 +8,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 from chronometry.digest import (
     call_text_llm,
     generate_category_summaries,

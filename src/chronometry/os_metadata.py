@@ -43,7 +43,7 @@ def get_active_app() -> str | None:
 def get_front_window_title() -> str | None:
     """Return the title of the front window of the active application."""
     return _run_osascript(
-        "tell application \"System Events\" to get name of front window of "
+        'tell application "System Events" to get name of front window of '
         "first application process whose frontmost is true"
     )
 
@@ -59,9 +59,7 @@ def get_chrome_url(active_app: str | None = None) -> str | None:
         active_app = get_active_app()
     if active_app and "chrome" not in active_app.lower():
         return None
-    return _run_osascript(
-        'tell application "Google Chrome" to get URL of active tab of front window'
-    )
+    return _run_osascript('tell application "Google Chrome" to get URL of active tab of front window')
 
 
 def get_workspace_path(window_title: str | None = None) -> str | None:

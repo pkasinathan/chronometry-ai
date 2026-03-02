@@ -233,7 +233,11 @@ def main():
         for category, data in digest["category_summaries"].items():
             logger.info(
                 "%s %s (%d activities, %dm):\n  %s",
-                data["icon"], category, data["count"], data["duration_minutes"], data["summary"],
+                data["icon"],
+                category,
+                data["count"],
+                data["duration_minutes"],
+                data["summary"],
             )
 
     except Exception as e:

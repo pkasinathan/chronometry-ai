@@ -9,7 +9,6 @@ from unittest.mock import MagicMock, Mock, PropertyMock, patch
 import pytest
 
 
-
 class TestInitialization:
     """Tests for ChronometryApp initialization."""
 
@@ -399,6 +398,7 @@ class TestCaptureLoop:
         }
 
         call_count = [0]
+
         def stop_after_second_sleep(*args):
             call_count[0] += 1
             if call_count[0] >= 2:
@@ -433,6 +433,7 @@ class TestCaptureLoop:
         }
 
         call_count = [0]
+
         def stop_after_second_sleep(*args):
             call_count[0] += 1
             if call_count[0] >= 2:
@@ -466,6 +467,7 @@ class TestCaptureLoop:
         }
 
         call_count = [0]
+
         def stop_after_second_sleep(*args):
             call_count[0] += 1
             if call_count[0] >= 2:
@@ -482,7 +484,9 @@ class TestCaptureLoop:
     @patch("chronometry.menubar_app.capture_iteration")
     @patch("chronometry.menubar_app.show_notification")
     @patch("chronometry.menubar_app.time.sleep")
-    def test_capture_loop_handles_max_errors(self, mock_sleep, mock_notify, mock_iteration, mock_get_monitor, mock_mss, mock_app):
+    def test_capture_loop_handles_max_errors(
+        self, mock_sleep, mock_notify, mock_iteration, mock_get_monitor, mock_mss, mock_app
+    ):
         """Test capture loop stops after max consecutive errors."""
         mock_sct = Mock()
         mock_sct.monitors = [
@@ -584,7 +588,9 @@ class TestAnnotationLoop:
     @patch("chronometry.menubar_app.count_unannotated_frames")
     @patch("chronometry.menubar_app.time.sleep")
     @patch("chronometry.menubar_app.time.time")
-    def test_annotation_loop_generates_timeline(self, mock_time, mock_sleep, mock_count, mock_annotate, mock_timeline, mock_app):
+    def test_annotation_loop_generates_timeline(
+        self, mock_time, mock_sleep, mock_count, mock_annotate, mock_timeline, mock_app
+    ):
         """Test that timeline is generated periodically."""
         mock_count.return_value = 4
         mock_annotate.return_value = 4
@@ -605,7 +611,9 @@ class TestAnnotationLoop:
     @patch("chronometry.menubar_app.count_unannotated_frames")
     @patch("chronometry.menubar_app.time.sleep")
     @patch("chronometry.menubar_app.time.time")
-    def test_annotation_loop_generates_digest(self, mock_time, mock_sleep, mock_count, mock_annotate, mock_timeline, mock_digest, mock_app):
+    def test_annotation_loop_generates_digest(
+        self, mock_time, mock_sleep, mock_count, mock_annotate, mock_timeline, mock_digest, mock_app
+    ):
         """Test that digest is generated after annotation."""
         mock_count.return_value = 4
         mock_annotate.return_value = 4
@@ -729,11 +737,13 @@ class TestHotkeySetup:
 
     def test_setup_hotkey_handles_no_accessibility(self, mock_app):
         """Test that hotkey setup handles missing Accessibility permission."""
-        with patch("chronometry.menubar_app.CGEventTapCreate", create=True, return_value=None), \
-             patch("chronometry.menubar_app.CGEventMaskBit", create=True), \
-             patch("chronometry.menubar_app.kCGHeadInsertEventTap", create=True), \
-             patch("chronometry.menubar_app.kCGEventKeyDown", create=True), \
-             patch("chronometry.menubar_app.kCGSessionEventTap", create=True):
+        with (
+            patch("chronometry.menubar_app.CGEventTapCreate", create=True, return_value=None),
+            patch("chronometry.menubar_app.CGEventMaskBit", create=True),
+            patch("chronometry.menubar_app.kCGHeadInsertEventTap", create=True),
+            patch("chronometry.menubar_app.kCGEventKeyDown", create=True),
+            patch("chronometry.menubar_app.kCGSessionEventTap", create=True),
+        ):
             mock_app.setup_hotkey()
 
 

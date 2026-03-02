@@ -141,7 +141,6 @@ def create_synthetic_annotation(root_dir: str, timestamp: datetime, reason: str,
         summary: Human-readable summary
     """
 
-
     try:
         # Get the path where the screenshot would have been
         frame_path = get_frame_path(root_dir, timestamp)

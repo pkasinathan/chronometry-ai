@@ -10,7 +10,6 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-
 from chronometry.common import (
     calculate_compensated_sleep,
     cleanup_old_data,
@@ -42,17 +41,25 @@ class TestLoadConfig:
         """Test loading a valid configuration file."""
         user_file = tmp_path / "user_config.yaml"
         system_file = tmp_path / "system_config.yaml"
-        user_file.write_text(yaml.dump({
-            "capture": {"capture_interval_seconds": 900, "monitor_index": 1, "retention_days": 30},
-            "notifications": {"enabled": False},
-        }))
-        system_file.write_text(yaml.dump({
-            "root_dir": str(tmp_path / "data"),
-            "capture": {"monitor_index": 0},
-            "annotation": {"batch_size": 1, "timeout_sec": 30},
-            "timeline": {"bucket_minutes": 15},
-            "paths": {"root_dir": str(tmp_path / "data")},
-        }))
+        user_file.write_text(
+            yaml.dump(
+                {
+                    "capture": {"capture_interval_seconds": 900, "monitor_index": 1, "retention_days": 30},
+                    "notifications": {"enabled": False},
+                }
+            )
+        )
+        system_file.write_text(
+            yaml.dump(
+                {
+                    "root_dir": str(tmp_path / "data"),
+                    "capture": {"monitor_index": 0},
+                    "annotation": {"batch_size": 1, "timeout_sec": 30},
+                    "timeline": {"bucket_minutes": 15},
+                    "paths": {"root_dir": str(tmp_path / "data")},
+                }
+            )
+        )
         config = load_config(
             user_config_path=str(user_file),
             system_config_path=str(system_file),

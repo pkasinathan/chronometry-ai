@@ -7,7 +7,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 from chronometry.timeline import (
     calculate_stats,
     categorize_activity,

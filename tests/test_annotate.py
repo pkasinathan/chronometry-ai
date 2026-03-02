@@ -2,13 +2,11 @@
 
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
-
-
-from datetime import datetime
 
 from chronometry.annotate import annotate_frames, call_vision_api_with_retry, encode_image_to_base64, process_batch
 from chronometry.llm_backends import call_vision_api

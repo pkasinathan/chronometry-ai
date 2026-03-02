@@ -145,9 +145,7 @@ def _raise_or_restart_ollama(response: requests.Response, base_url: str) -> None
 # ---------------------------------------------------------------------------
 
 
-def call_ollama_vision(
-    images: list[dict], config: dict, prompt_override: str | None = None
-) -> dict:
+def call_ollama_vision(images: list[dict], config: dict, prompt_override: str | None = None) -> dict:
     """Call Ollama vision model with base64 images.
 
     Args:
@@ -169,8 +167,10 @@ def call_ollama_vision(
 
     ensure_ollama_running(base_url)
 
-    prompt = prompt_override or config["annotation"].get("screenshot_analysis_prompt") or config["annotation"].get(
-        "prompt", ""
+    prompt = (
+        prompt_override
+        or config["annotation"].get("screenshot_analysis_prompt")
+        or config["annotation"].get("prompt", "")
     )
 
     logger.info(f"Ollama vision: POST {base_url}/api/chat model={model_name} images={len(images)}")
@@ -180,9 +180,7 @@ def call_ollama_vision(
             f"{base_url}/api/chat",
             json={
                 "model": model_name,
-                "messages": [
-                    {"role": "user", "content": prompt, "images": [img["base64_data"] for img in images]}
-                ],
+                "messages": [{"role": "user", "content": prompt, "images": [img["base64_data"] for img in images]}],
                 "stream": False,
             },
             timeout=timeout,
@@ -261,9 +259,7 @@ def call_ollama_text(
 # ---------------------------------------------------------------------------
 
 
-def call_openai_vision(
-    images: list[dict], config: dict, prompt_override: str | None = None
-) -> dict:
+def call_openai_vision(images: list[dict], config: dict, prompt_override: str | None = None) -> dict:
     """Call an OpenAI-compatible vision endpoint with base64 images.
 
     Args:
@@ -283,8 +279,10 @@ def call_openai_vision(
     model_name = local_config.get("model_name", "Qwen/Qwen2.5-VL-7B-Instruct")
     timeout = local_config.get("timeout_sec", 120)
 
-    prompt = prompt_override or config["annotation"].get("screenshot_analysis_prompt") or config["annotation"].get(
-        "prompt", ""
+    prompt = (
+        prompt_override
+        or config["annotation"].get("screenshot_analysis_prompt")
+        or config["annotation"].get("prompt", "")
     )
 
     logger.info(
@@ -367,9 +365,7 @@ def call_openai_text(
 # ---------------------------------------------------------------------------
 
 
-def call_vision_api(
-    images: list[dict], config: dict, prompt_override: str | None = None
-) -> dict:
+def call_vision_api(images: list[dict], config: dict, prompt_override: str | None = None) -> dict:
     """Route a vision (image summarization) call to the configured backend.
 
     Args:

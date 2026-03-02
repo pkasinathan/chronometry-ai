@@ -6,7 +6,6 @@ from unittest.mock import patch
 
 import pytest
 
-
 from chronometry.llm_backends import (
     _parse_openai_text_response,
     call_text_api,

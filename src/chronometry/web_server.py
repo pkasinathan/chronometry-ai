@@ -641,9 +641,7 @@ def get_frames():
             return jsonify({"frames": []})
 
         frames = []
-        json_files = sorted(
-            f for f in daily_dir.glob("*.json") if not f.stem.endswith("_meta")
-        )
+        json_files = sorted(f for f in daily_dir.glob("*.json") if not f.stem.endswith("_meta"))
 
         for json_file in json_files:
             data = load_json(json_file)
@@ -684,12 +682,14 @@ def get_frame_stats():
 
         total = len(list(daily_dir.glob("*.png")))
         unannotated = count_unannotated_frames(daily_dir)
-        return jsonify({
-            "total": total,
-            "annotated": total - unannotated,
-            "unannotated": unannotated,
-            "annotation_running": _annotation_running,
-        })
+        return jsonify(
+            {
+                "total": total,
+                "annotated": total - unannotated,
+                "unannotated": unannotated,
+                "annotation_running": _annotation_running,
+            }
+        )
     except Exception as e:
         logger.error(f"Error getting frame stats: {e}")
         return jsonify({"error": "Failed to load frame stats"}), 500
