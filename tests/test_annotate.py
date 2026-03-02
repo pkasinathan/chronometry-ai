@@ -214,6 +214,8 @@ class TestBatchProcessing:
         for i in range(3):
             img_path = tmp_path / f"test_{i}.png"
             img_path.write_bytes(b"fake image")
+            inference_path = tmp_path / f"test_{i}_inference.jpg"
+            inference_path.write_bytes(b"fake jpeg")
             image_paths.append(img_path)
 
         mock_encode.return_value = "base64data"
@@ -233,6 +235,8 @@ class TestBatchProcessing:
         for i in range(2):
             img_path = tmp_path / f"test_{i}.png"
             img_path.write_bytes(b"fake image")
+            inference_path = tmp_path / f"test_{i}_inference.jpg"
+            inference_path.write_bytes(b"fake jpeg")
             image_paths.append(img_path)
 
         mock_encode.return_value = "base64data"
@@ -250,6 +254,7 @@ class TestBatchProcessing:
         """Test batch processing handles encoding failures."""
         image_paths = [tmp_path / "test.png"]
         image_paths[0].write_bytes(b"fake image")
+        (tmp_path / "test_inference.jpg").write_bytes(b"fake jpeg")
 
         mock_encode.side_effect = Exception("Encoding failed")
 
@@ -261,6 +266,7 @@ class TestBatchProcessing:
         """Test batch processing handles API failures."""
         image_paths = [tmp_path / "test.png"]
         image_paths[0].write_bytes(b"fake image")
+        (tmp_path / "test_inference.jpg").write_bytes(b"fake jpeg")
 
         mock_encode.return_value = "base64data"
         mock_api.side_effect = Exception("API failed")
@@ -272,9 +278,30 @@ class TestBatchProcessing:
         """Test that batch processing is skipped when no images."""
         mock_encode.side_effect = Exception("Failed")
 
-        image_paths = [Path("test.png")]
+        image_paths = [Path("/nonexistent/test.png")]
 
         process_batch(image_paths, test_config)
+
+    @patch("chronometry.annotate.save_json")
+    @patch("chronometry.annotate.call_vision_api_with_retry")
+    @patch("chronometry.annotate.encode_image_to_base64")
+    @patch("chronometry.capture.downscale_for_inference")
+    def test_process_batch_generates_missing_inference_jpg(
+        self, mock_downscale, mock_encode, mock_api, mock_save, test_config, tmp_path
+    ):
+        """Test that missing inference JPEG is generated from PNG."""
+        img_path = tmp_path / "test.png"
+        img_path.write_bytes(b"fake image")
+        generated_jpg = tmp_path / "test_inference.jpg"
+
+        mock_downscale.return_value = generated_jpg
+        mock_encode.return_value = "base64data"
+        mock_api.return_value = {"summary": "Test summary", "sources": []}
+
+        process_batch([img_path], test_config)
+
+        mock_downscale.assert_called_once()
+        mock_api.assert_called_once()
 
 
 class TestFrameAnnotation:

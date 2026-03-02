@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chronometry-ai"
-version = "1.0.13"
+version = "1.0.14"
 description = "Privacy-first activity tracker with AI-powered annotation and timeline generation"
 readme = "README.md"
 license = {text = "Apache-2.0"}

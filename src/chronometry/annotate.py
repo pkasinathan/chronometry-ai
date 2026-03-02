@@ -196,21 +196,23 @@ def process_batch(image_paths: list[Path], config: dict):
     annotation_config = config["annotation"]
     json_suffix = annotation_config.get("json_suffix", ".json")
 
-    # Prepare image data for API (prefer downscaled inference JPEG)
+    # Prepare image data for API (always use downscaled inference JPEG)
+    from chronometry.capture import downscale_for_inference
+
+    max_edge = annotation_config.get("inference_image_max_edge", 1280)
+    quality = annotation_config.get("inference_image_quality", 80)
     images = []
     for idx, image_path in enumerate(image_paths):
         try:
             inference_path = image_path.with_name(image_path.stem + "_inference.jpg")
-            if inference_path.exists():
-                path_to_encode = inference_path
-                content_type = "image/jpeg"
-            else:
-                path_to_encode = image_path
-                content_type = "image/png"
-            base64_data = encode_image_to_base64(path_to_encode)
-            images.append({"name": f"frame{idx}", "content_type": content_type, "base64_data": base64_data})
+            if not inference_path.exists():
+                logger.info(f"Generating missing inference JPEG for {image_path.name}")
+                inference_path = downscale_for_inference(image_path, max_edge=max_edge, quality=quality)
+            logger.info(f"Annotating: {inference_path.name}")
+            base64_data = encode_image_to_base64(inference_path)
+            images.append({"name": f"frame{idx}", "content_type": "image/jpeg", "base64_data": base64_data})
         except Exception as e:
-            logger.error(f"Failed to encode image {image_path}: {e}")
+            logger.error(f"Failed to process image {image_path}: {e}")
             continue
 
     if not images:
