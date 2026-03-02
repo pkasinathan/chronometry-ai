@@ -678,6 +678,7 @@ class TestConfigUpdateValidation:
     def test_update_config_rejects_non_dict_section(self, mock_backup, tmp_path, monkeypatch):
         """Test that non-dict section values return 400."""
         import chronometry.web_server as ws
+
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         user_config = config_dir / "user_config.yaml"
@@ -749,8 +750,7 @@ class TestSecretKeyWarning:
         init_config()
 
         mock_logger.warning.assert_any_call(
-            "SECRET_KEY is the insecure default! "
-            "Run 'chrono init' or set server.secret_key in user_config.yaml."
+            "SECRET_KEY is the insecure default! Run 'chrono init' or set server.secret_key in user_config.yaml."
         )
 
 

@@ -665,7 +665,13 @@ class TestDigestPromptTemplateSubstitution:
         mock_llm.return_value = {"content": "Overall summary", "tokens": 20}
 
         all_activities = [
-            {"timestamp": "20260302_100000", "summary": "Wrote tests", "category": "Development", "icon": "\U0001f4bb", "color": "#4CAF50"},
+            {
+                "timestamp": "20260302_100000",
+                "summary": "Wrote tests",
+                "category": "Development",
+                "icon": "\U0001f4bb",
+                "color": "#4CAF50",
+            },
         ] * 5
         stats = {
             "focus_percentage": 85,

@@ -582,9 +582,7 @@ class TestBuildPrompt:
         """Test prompt with metadata but no recent context."""
         from chronometry.annotate import build_prompt
 
-        sample_config["annotation"]["screenshot_analysis_prompt"] = (
-            "Annotate.\n\n{metadata_block}\n\n{recent_context}"
-        )
+        sample_config["annotation"]["screenshot_analysis_prompt"] = "Annotate.\n\n{metadata_block}\n\n{recent_context}"
         metadata = {"active_app": "Chrome", "window_title": "Google"}
 
         result = build_prompt(sample_config, metadata=metadata, recent_context="")
@@ -597,9 +595,7 @@ class TestBuildPrompt:
         """Test prompt with recent context but no metadata."""
         from chronometry.annotate import build_prompt
 
-        sample_config["annotation"]["screenshot_analysis_prompt"] = (
-            "Annotate.\n\n{metadata_block}\n\n{recent_context}"
-        )
+        sample_config["annotation"]["screenshot_analysis_prompt"] = "Annotate.\n\n{metadata_block}\n\n{recent_context}"
 
         result = build_prompt(sample_config, metadata=None, recent_context="Did some coding")
 
@@ -611,9 +607,7 @@ class TestBuildPrompt:
         """Test prompt with neither metadata nor context (screenshot-only)."""
         from chronometry.annotate import build_prompt
 
-        sample_config["annotation"]["screenshot_analysis_prompt"] = (
-            "Annotate.\n\n{metadata_block}\n\n{recent_context}"
-        )
+        sample_config["annotation"]["screenshot_analysis_prompt"] = "Annotate.\n\n{metadata_block}\n\n{recent_context}"
 
         result = build_prompt(sample_config, metadata=None, recent_context="")
 

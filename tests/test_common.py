@@ -576,6 +576,7 @@ class TestBackupConfig:
         config_file.write_text("capture:\n  interval: 900\n")
 
         from chronometry.common import backup_config
+
         result = backup_config(config_file)
 
         assert result is not None
@@ -588,6 +589,7 @@ class TestBackupConfig:
     def test_backup_returns_none_for_missing_file(self, tmp_path):
         """Test that backup returns None when source file doesn't exist."""
         from chronometry.common import backup_config
+
         result = backup_config(tmp_path / "nonexistent.yaml")
         assert result is None
 
@@ -598,6 +600,7 @@ class TestBackupConfig:
         config_file.write_text("test: true\n")
 
         from chronometry.common import backup_config
+
         result = backup_config(config_file)
 
         assert result is not None
@@ -637,6 +640,7 @@ class TestLoadConfigEmptyGuard:
             "paths": {"root_dir": str(tmp_path / "data")},
         }
         import yaml
+
         (config_dir / "system_config.yaml").write_text(yaml.dump(system_config))
 
         # Write empty user config (comments only - returns None from yaml.safe_load)
@@ -680,7 +684,9 @@ class TestDefaultConfigParity:
 
     def test_repo_and_packaged_system_defaults_match(self):
         repo_default = Path(__file__).resolve().parents[1] / "config" / "system_config.yaml"
-        packaged_default = Path(__file__).resolve().parents[1] / "src" / "chronometry" / "defaults" / "system_config.yaml"
+        packaged_default = (
+            Path(__file__).resolve().parents[1] / "src" / "chronometry" / "defaults" / "system_config.yaml"
+        )
 
         with open(repo_default, encoding="utf-8") as f:
             repo_data = yaml.safe_load(f) or {}

@@ -167,8 +167,7 @@ def bootstrap(force: bool = False):
                 backup_path = backup_config(dest)
                 if backup_path is None and dest.exists():
                     raise RuntimeError(
-                        f"Failed to back up {dest.name} before overwriting. "
-                        f"Aborting to prevent data loss."
+                        f"Failed to back up {dest.name} before overwriting. Aborting to prevent data loss."
                     )
             src_text = defaults.joinpath(name).read_text()
             if name == "system_config.yaml":

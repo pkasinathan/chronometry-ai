@@ -95,8 +95,7 @@ def init_config():
 
         if app.config["SECRET_KEY"] == "change-me-in-production":
             logger.warning(
-                "SECRET_KEY is the insecure default! "
-                "Run 'chrono init' or set server.secret_key in user_config.yaml."
+                "SECRET_KEY is the insecure default! Run 'chrono init' or set server.secret_key in user_config.yaml."
             )
 
         logger.info(f"Configuration loaded successfully. Root dir: {config.get('root_dir')}")
@@ -151,9 +150,9 @@ def get_config():
                 "local_model": {
                     "provider": config["annotation"].get("local_model", {}).get("provider", "ollama"),
                     "model_name": config["annotation"].get("local_model", {}).get("model_name", "qwen3-vl:8b"),
-                    "fallback_model_name": config["annotation"].get("local_model", {}).get(
-                        "fallback_model_name", "qwen2.5vl:7b"
-                    ),
+                    "fallback_model_name": config["annotation"]
+                    .get("local_model", {})
+                    .get("fallback_model_name", "qwen2.5vl:7b"),
                     "timeout_sec": config["annotation"].get("local_model", {}).get("timeout_sec", 300),
                     "max_retries": config["annotation"].get("local_model", {}).get("max_retries", 3),
                     "keep_alive": config["annotation"].get("local_model", {}).get("keep_alive", "1m"),
@@ -263,10 +262,12 @@ def reset_config():
         bootstrap(force=True)
         init_config()
 
-        return jsonify({
-            "status": "success",
-            "message": "Configuration reset to defaults",
-        })
+        return jsonify(
+            {
+                "status": "success",
+                "message": "Configuration reset to defaults",
+            }
+        )
     except Exception as e:
         logger.error(f"Error resetting config: {e}")
         return jsonify({"status": "error", "message": "Failed to reset configuration"}), 500
@@ -806,6 +807,7 @@ def get_system_health():
     """Get live runtime health statistics."""
     try:
         from chronometry.runtime_stats import stats
+
         return jsonify(stats.snapshot())
     except Exception as e:
         logger.error(f"Error getting system health: {e}")

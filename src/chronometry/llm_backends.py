@@ -501,8 +501,7 @@ def call_text_api(
         if not result.get("content") and result.get("tokens", 0) > 0:
             stats.record("llm.text_empty_content")
             logger.warning(
-                f"Text LLM returned empty content with {result['tokens']} tokens "
-                f"(likely thinking-mode exhaustion)"
+                f"Text LLM returned empty content with {result['tokens']} tokens (likely thinking-mode exhaustion)"
             )
 
         stats.record("llm.text_succeeded")

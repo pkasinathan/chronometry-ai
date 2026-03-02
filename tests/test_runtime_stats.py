@@ -66,8 +66,13 @@ class TestSnapshot:
     def test_snapshot_llm_keys(self):
         snap = stats.snapshot()
         expected = {
-            "vision_calls", "vision_succeeded", "vision_failed",
-            "text_calls", "text_succeeded", "text_failed", "text_empty_content",
+            "vision_calls",
+            "vision_succeeded",
+            "vision_failed",
+            "text_calls",
+            "text_succeeded",
+            "text_failed",
+            "text_empty_content",
         }
         assert set(snap["llm"].keys()) == expected
 

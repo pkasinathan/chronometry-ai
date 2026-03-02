@@ -24,27 +24,29 @@ except ImportError:  # pragma: no cover - non-POSIX fallback
 logger = logging.getLogger(__name__)
 
 
-_KNOWN_KEYS = frozenset([
-    "capture.attempted",
-    "capture.succeeded",
-    "capture.skipped_locked",
-    "capture.skipped_camera",
-    "capture.failed",
-    "annotation.runs",
-    "annotation.frames_attempted",
-    "annotation.frames_succeeded",
-    "annotation.frames_failed",
-    "llm.vision_calls",
-    "llm.vision_succeeded",
-    "llm.vision_failed",
-    "llm.text_calls",
-    "llm.text_succeeded",
-    "llm.text_failed",
-    "llm.text_empty_content",
-    "digest.generated",
-    "digest.failed",
-    "digest.cached_hits",
-])
+_KNOWN_KEYS = frozenset(
+    [
+        "capture.attempted",
+        "capture.succeeded",
+        "capture.skipped_locked",
+        "capture.skipped_camera",
+        "capture.failed",
+        "annotation.runs",
+        "annotation.frames_attempted",
+        "annotation.frames_succeeded",
+        "annotation.frames_failed",
+        "llm.vision_calls",
+        "llm.vision_succeeded",
+        "llm.vision_failed",
+        "llm.text_calls",
+        "llm.text_succeeded",
+        "llm.text_failed",
+        "llm.text_empty_content",
+        "digest.generated",
+        "digest.failed",
+        "digest.cached_hits",
+    ]
+)
 
 
 class RuntimeStats:
@@ -127,9 +129,7 @@ class RuntimeStats:
         """
         with self._counter_lock:
             if key not in _KNOWN_KEYS:
-                raise ValueError(
-                    f"Unknown runtime-stats key {key!r}. " f"Valid keys: {sorted(_KNOWN_KEYS)}"
-                )
+                raise ValueError(f"Unknown runtime-stats key {key!r}. Valid keys: {sorted(_KNOWN_KEYS)}")
             self._counters[key] += n
 
             try:
