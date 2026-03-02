@@ -29,30 +29,55 @@ def _strip_code_fences(text: str) -> str:
     return stripped
 
 
+def _dict_to_prose(d: dict) -> str:
+    """Convert a structured annotation dict into a readable sentence."""
+    app = d.get("application", "")
+    activity = d.get("activity", "")
+    task_type = d.get("task_type", "")
+    artifact = d.get("artifact", "")
+
+    if not app and not activity:
+        return ", ".join(f"{k}: {v}" for k, v in d.items() if v) or str(d)
+
+    parts: list[str] = []
+    if app and activity:
+        parts.append(f"Using {app} — {activity}")
+    elif app:
+        parts.append(f"Using {app}")
+    elif activity:
+        parts.append(activity.capitalize())
+
+    details: list[str] = []
+    if task_type:
+        details.append(task_type)
+    if artifact:
+        details.append(artifact)
+    if details:
+        parts.append(f"({', '.join(details)})")
+
+    next_step = d.get("next_step", "")
+    if next_step:
+        parts.append(f"— next: {next_step}")
+
+    return " ".join(parts)
+
+
 def extract_summary_text(summary_field) -> str:
     """Extract a human-readable string from a summary field.
 
-    Handles both V1 plain-text summaries and V2 structured JSON summaries.
+    Handles plain-text prose summaries, structured JSON dicts, and JSON
+    strings wrapped in markdown code fences (common VLM output).
     """
     if not summary_field:
         return ""
     if isinstance(summary_field, dict):
-        parts = []
-        if summary_field.get("application"):
-            parts.append(summary_field["application"])
-        if summary_field.get("activity"):
-            parts.append(summary_field["activity"])
-        if summary_field.get("task_type"):
-            parts.append(f"[{summary_field['task_type']}]")
-        if summary_field.get("artifact"):
-            parts.append(summary_field["artifact"])
-        return " - ".join(parts) if parts else str(summary_field)
+        return _dict_to_prose(summary_field)
     if isinstance(summary_field, str):
         cleaned = _strip_code_fences(summary_field)
         try:
             parsed = json.loads(cleaned)
             if isinstance(parsed, dict):
-                return extract_summary_text(parsed)
+                return _dict_to_prose(parsed)
         except (json.JSONDecodeError, ValueError):
             pass
         return summary_field

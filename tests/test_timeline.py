@@ -8,9 +8,11 @@ from unittest.mock import patch
 import pytest
 
 from chronometry.timeline import (
+    _dict_to_prose,
     calculate_stats,
     categorize_activity,
     deduplicate_batch_annotations,
+    extract_summary_text,
     format_duration,
     generate_timeline,
     generate_timeline_html,
@@ -486,6 +488,73 @@ class TestGenerateTimeline:
         generate_timeline(config, datetime(2025, 11, 1))
 
         # Should complete without error (just logs a message)
+
+
+class TestExtractSummaryText:
+    """Tests for extract_summary_text and _dict_to_prose."""
+
+    def test_plain_prose_returned_as_is(self):
+        text = "The user is editing Python code in Cursor IDE."
+        assert extract_summary_text(text) == text
+
+    def test_empty_string(self):
+        assert extract_summary_text("") == ""
+
+    def test_none(self):
+        assert extract_summary_text(None) == ""
+
+    def test_dict_with_all_fields(self):
+        d = {
+            "application": "Cursor",
+            "activity": "Editing llm_backends.py",
+            "task_type": "coding",
+            "artifact": "chronometry",
+            "next_step": "run tests",
+        }
+        result = extract_summary_text(d)
+        assert "Cursor" in result
+        assert "Editing llm_backends.py" in result
+        assert "coding" in result
+        assert "chronometry" in result
+        assert "run tests" in result
+
+    def test_dict_without_optional_fields(self):
+        d = {"application": "Cursor", "activity": "Editing code"}
+        result = extract_summary_text(d)
+        assert "Cursor" in result
+        assert "Editing code" in result
+
+    def test_dict_app_only(self):
+        result = _dict_to_prose({"application": "Safari"})
+        assert "Safari" in result
+
+    def test_dict_activity_only(self):
+        result = _dict_to_prose({"activity": "browsing the web"})
+        assert "Browsing the web" in result
+
+    def test_dict_empty(self):
+        result = _dict_to_prose({})
+        assert result  # Should produce something, not crash
+
+    def test_json_string_with_code_fences(self):
+        raw = '```json\n{"application": "iTerm2", "activity": "Running tests", "task_type": "coding", "artifact": "chronometry"}\n```'
+        result = extract_summary_text(raw)
+        assert "iTerm2" in result
+        assert "Running tests" in result
+        assert "coding" in result
+
+    def test_json_string_without_fences(self):
+        raw = '{"application": "Chrome", "activity": "Browsing docs"}'
+        result = extract_summary_text(raw)
+        assert "Chrome" in result
+        assert "Browsing docs" in result
+
+    def test_invalid_json_string_returned_as_is(self):
+        raw = "This is not JSON, just a normal summary."
+        assert extract_summary_text(raw) == raw
+
+    def test_non_string_non_dict(self):
+        assert extract_summary_text(42) == "42"
 
 
 if __name__ == "__main__":

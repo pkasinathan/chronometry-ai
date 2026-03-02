@@ -10,20 +10,19 @@ annotation:
   inference_image_max_edge: 1280
   inference_image_quality: 80
   screenshot_analysis_prompt: |
-    You are a productivity logger.
+    You are a productivity logger analyzing a desktop screenshot.
 
     {metadata_block}
 
     {recent_context}
 
-    Extract from this screenshot and respond as a single JSON object with exactly these keys:
-    - "application": active application name
-    - "activity": what I am working on
-    - "task_type": type of task (coding, analysis, browsing, meeting, etc.)
-    - "artifact": specific file, repo, table, or URL
-    - "next_step": intended next step (inferred)
+    Describe what the user is doing in this screenshot in 2-4 detailed sentences. Include:
+    - The application being used and its purpose
+    - The specific task or content visible (file names, URLs, project names, code being written, documents open, etc.)
+    - Any notable details about the work context
 
-    Respond in compact JSON only. No explanation.
+    Write naturally in third person. Be specific about what is visible, not generic.
+    Do NOT respond with JSON. Write a plain-text prose description only.
   rewrite_screenshot_analysis_format_summary: false
   rewrite_screenshot_analysis_prompt: ''
 

@@ -5,6 +5,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-__version__ = "1.0.17"
+__version__ = "1.0.18"
 
 CHRONOMETRY_HOME = Path(os.environ.get("CHRONOMETRY_HOME", "~/.chronometry")).expanduser()
