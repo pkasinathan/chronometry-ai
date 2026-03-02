@@ -68,7 +68,7 @@ class RuntimeStats:
         self._counters: dict[str, int] = self._zero_counters()
 
     def _zero_counters(self) -> dict[str, int]:
-        return {key: 0 for key in _KNOWN_KEYS}
+        return dict.fromkeys(_KNOWN_KEYS, 0)
 
     def _stats_paths(self) -> tuple[Path, Path]:
         # Resolve at call time so tests can monkeypatch CHRONOMETRY_HOME safely.

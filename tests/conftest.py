@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
+
 @pytest.fixture()
 def project_root() -> Path:
     return Path(__file__).resolve().parent.parent

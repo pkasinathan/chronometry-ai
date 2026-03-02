@@ -668,7 +668,7 @@ class TestLoadConfigEmptyGuard:
         (config_dir / "user_config.yaml").write_text("# Empty\n")
 
         # Should raise ValueError (missing sections) rather than AttributeError
-        with pytest.raises(ValueError, match="[Mm]issing"):
+        with pytest.raises(ValueError, match=r"[Mm]issing"):
             load_config(
                 user_config_path=config_dir / "user_config.yaml",
                 system_config_path=config_dir / "system_config.yaml",
