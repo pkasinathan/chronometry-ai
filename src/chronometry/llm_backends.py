@@ -145,13 +145,16 @@ def _raise_or_restart_ollama(response: requests.Response, base_url: str) -> None
 # ---------------------------------------------------------------------------
 
 
-def call_ollama_vision(images: list[dict], config: dict, prompt_override: str | None = None) -> dict:
+def call_ollama_vision(
+    images: list[dict], config: dict, prompt_override: str | None = None, model_override: str | None = None
+) -> dict:
     """Call Ollama vision model with base64 images.
 
     Args:
         images: List of image dicts with base64_data and content_type
         config: Configuration dictionary
         prompt_override: If set, use this prompt instead of the one in config
+        model_override: If set, use this model instead of the one in config
 
     Returns:
         {"summary": str, "sources": list}
@@ -162,8 +165,8 @@ def call_ollama_vision(images: list[dict], config: dict, prompt_override: str | 
 
     local_config = config["annotation"].get("local_model", {})
     base_url = local_config.get("base_url", "http://localhost:11434")
-    model_name = local_config.get("model_name", "qwen2.5vl:7b")
-    timeout = local_config.get("timeout_sec", 120)
+    model_name = model_override or local_config.get("model_name", "qwen3.5:35b-a3b")
+    timeout = local_config.get("timeout_sec", 300)
 
     ensure_ollama_running(base_url)
 
@@ -208,7 +211,7 @@ def call_ollama_text(
     local_config = config.get("digest", {}).get("local_model", {})
     base_url = local_config.get("base_url", "http://localhost:11434")
     model_name = local_config.get("model_name", "qwen2.5:7b")
-    timeout = local_config.get("timeout_sec", 120)
+    timeout = local_config.get("timeout_sec", 300)
 
     ensure_ollama_running(base_url)
 
@@ -277,7 +280,7 @@ def call_openai_vision(images: list[dict], config: dict, prompt_override: str | 
     local_config = config["annotation"].get("local_model", {})
     base_url = local_config.get("base_url", "http://localhost:8000")
     model_name = local_config.get("model_name", "Qwen/Qwen2.5-VL-7B-Instruct")
-    timeout = local_config.get("timeout_sec", 120)
+    timeout = local_config.get("timeout_sec", 300)
 
     prompt = (
         prompt_override
@@ -333,7 +336,7 @@ def call_openai_text(
     local_config = config.get("digest", {}).get("local_model", {})
     base_url = local_config.get("base_url", "http://localhost:8000")
     model_name = local_config.get("model_name", "Qwen/Qwen2.5-7B-Instruct")
-    timeout = local_config.get("timeout_sec", 120)
+    timeout = local_config.get("timeout_sec", 300)
 
     digest_config = config.get("digest", {})
     if max_tokens is None:
@@ -365,13 +368,16 @@ def call_openai_text(
 # ---------------------------------------------------------------------------
 
 
-def call_vision_api(images: list[dict], config: dict, prompt_override: str | None = None) -> dict:
+def call_vision_api(
+    images: list[dict], config: dict, prompt_override: str | None = None, model_override: str | None = None
+) -> dict:
     """Route a vision (image summarization) call to the configured backend.
 
     Args:
         images: List of image dicts with base64_data and content_type
         config: Configuration dictionary
         prompt_override: If set, use this prompt instead of the one in config
+        model_override: If set, use this model instead of the one in config
 
     Returns:
         {"summary": str, "sources": list}
@@ -380,7 +386,7 @@ def call_vision_api(images: list[dict], config: dict, prompt_override: str | Non
     logger.info(f"Vision API provider: {provider}")
 
     if provider == "ollama":
-        return call_ollama_vision(images, config, prompt_override=prompt_override)
+        return call_ollama_vision(images, config, prompt_override=prompt_override, model_override=model_override)
     if provider == "openai_compatible":
         return call_openai_vision(images, config, prompt_override=prompt_override)
     raise ValueError(f"Unknown vision provider: {provider}")

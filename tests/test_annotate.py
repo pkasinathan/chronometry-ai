@@ -146,8 +146,9 @@ class TestRetryLogic:
         mock_sleep.assert_any_call(2)
 
     @patch("chronometry.annotate.call_vision_api")
-    def test_retry_fails_after_max_attempts(self, mock_api):
-        """Test that exception is raised after max retries."""
+    @patch("chronometry.annotate.time.sleep")
+    def test_retry_fails_after_max_attempts_returns_none(self, mock_sleep, mock_api):
+        """Test that None is returned after all models exhaust retries."""
         config = {
             "annotation": {
                 "backend": "local",
@@ -161,11 +162,36 @@ class TestRetryLogic:
 
         images = [{"name": "test", "content_type": "image/png", "base64_data": "abc"}]
 
-        with pytest.raises(Exception) as exc_info:
-            call_vision_api_with_retry(images, config, max_retries=3)
+        result = call_vision_api_with_retry(images, config, max_retries=3)
 
-        assert "API failed" in str(exc_info.value)
-        assert mock_api.call_count == 3
+        assert result is None
+        assert mock_api.call_count == 6  # 3 primary + 3 fallback
+
+    @patch("chronometry.annotate.call_vision_api")
+    @patch("chronometry.annotate.time.sleep")
+    def test_retry_falls_back_to_secondary_model(self, mock_sleep, mock_api):
+        """Test that fallback model is tried when primary exhausts retries."""
+        config = {
+            "annotation": {
+                "backend": "local",
+                "api_url": "https://example.com/api",
+                "screenshot_analysis_prompt": "test",
+                "timeout_sec": 30,
+            }
+        }
+
+        mock_api.side_effect = [
+            Exception("Fail 1"),
+            Exception("Fail 2"),
+            Exception("Fail 3"),
+            {"summary": "fallback success", "sources": []},
+        ]
+
+        images = [{"name": "test", "content_type": "image/png", "base64_data": "abc"}]
+        result = call_vision_api_with_retry(images, config, max_retries=3)
+
+        assert result["summary"] == "fallback success"
+        assert mock_api.call_count == 4  # 3 primary fails + 1 fallback success
 
     @patch("chronometry.annotate.call_vision_api")
     def test_retry_succeeds_immediately(self, mock_api):

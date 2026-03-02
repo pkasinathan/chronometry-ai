@@ -103,34 +103,50 @@ def build_prompt(config: dict, metadata: dict | None = None, recent_context: str
 
 
 def call_vision_api_with_retry(
-    images: list[dict], config: dict, max_retries: int = 3, prompt_override: str | None = None
-) -> dict:
-    """Call the configured vision API with retry logic and exponential backoff.
+    images: list[dict], config: dict, max_retries: int | None = None, prompt_override: str | None = None
+) -> dict | None:
+    """Call the configured vision API with primary/fallback model strategy.
+
+    Tries the primary model up to max_retries times, then falls back to the
+    fallback model for another max_retries attempts. If both fail, returns
+    None to avoid pressuring the system.
 
     Args:
         images: List of image dictionaries with base64_data
         config: Configuration dictionary
-        max_retries: Maximum number of retry attempts
+        max_retries: Maximum retry attempts per model (default from config or 3)
         prompt_override: If set, use this prompt instead of the one in config
 
     Returns:
-        API response dictionary with 'summary' and 'sources' fields
-
-    Raises:
-        Exception: If all retry attempts fail
+        API response dictionary with 'summary' and 'sources' fields, or None
     """
-    for attempt in range(max_retries):
-        try:
-            return call_vision_api(images, config, prompt_override=prompt_override)
-        except Exception as e:
-            if attempt == max_retries - 1:
-                logger.error(f"Vision API call failed after {max_retries} attempts: {e}")
-                raise
+    local_config = config.get("annotation", {}).get("local_model", {})
+    if max_retries is None:
+        max_retries = local_config.get("max_retries", 3)
 
-            wait_time = 2**attempt
-            logger.warning(f"Vision API call failed (attempt {attempt + 1}/{max_retries}): {e}")
-            logger.info(f"Retrying in {wait_time} seconds...")
-            time.sleep(wait_time)
+    primary_model = local_config.get("model_name", "qwen3.5:35b-a3b")
+    fallback_model = local_config.get("fallback_model_name", "qwen2.5vl:7b")
+
+    models = [(primary_model, "primary"), (fallback_model, "fallback")]
+
+    for model_name, label in models:
+        logger.info(f"Trying {label} model: {model_name}")
+        for attempt in range(max_retries):
+            try:
+                return call_vision_api(images, config, prompt_override=prompt_override, model_override=model_name)
+            except Exception as e:
+                logger.warning(
+                    f"{label.capitalize()} model {model_name} failed (attempt {attempt + 1}/{max_retries}): {e}"
+                )
+                if attempt < max_retries - 1:
+                    wait_time = 2**attempt
+                    logger.info(f"Retrying in {wait_time} seconds...")
+                    time.sleep(wait_time)
+
+        logger.error(f"{label.capitalize()} model {model_name} failed after {max_retries} attempts")
+
+    logger.warning("All models exhausted — skipping annotation to avoid pressuring the system")
+    return None
 
 
 def format_summary_with_llm(raw_summary: str, config: dict, batch_size: int) -> tuple:
@@ -235,6 +251,10 @@ def process_batch(image_paths: list[Path], config: dict):
     try:
         logger.info(f"Calling vision API with {len(images)} images...")
         result = call_vision_api_with_retry(images, config, prompt_override=prompt_override)
+
+        if result is None:
+            logger.warning(f"Skipping annotation for {len(image_paths)} frames — all models failed")
+            return
 
         # Get the raw summary
         raw_summary = result.get("summary", "")

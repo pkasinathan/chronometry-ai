@@ -23,8 +23,10 @@ annotation:
     # "ollama" or "openai_compatible" (vLLM, LM Studio, llama.cpp, etc.)
     provider: "ollama"
     base_url: "http://localhost:11434"
-    model_name: "qwen2.5vl:7b"
-    timeout_sec: 120
+    model_name: "qwen3.5:35b-a3b"
+    fallback_model_name: "qwen2.5vl:7b"
+    timeout_sec: 300
+    max_retries: 3
 
 digest:
   enabled: true
@@ -39,8 +41,8 @@ digest:
   local_model:
     provider: "ollama"
     base_url: "http://localhost:11434"
-    model_name: "qwen2.5vl:7b"
-    timeout_sec: 120
+    model_name: "qwen2.5:7b"
+    timeout_sec: 300
 
 capture:
   region: null
