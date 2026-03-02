@@ -267,20 +267,11 @@ class TestManualActions:
         mock_browser.assert_called_once_with("http://localhost:8051")
 
     @patch("chronometry.menubar_app.webbrowser.open")
-    @patch("chronometry.menubar_app.Path")
-    def test_open_timeline(self, mock_path, mock_browser, mock_app):
+    def test_open_timeline(self, mock_browser, mock_app):
         """Test opening timeline in browser."""
-        mock_timeline_file = Mock()
-        mock_timeline_file.exists.return_value = True
-        mock_timeline_file.absolute.return_value = "/tmp/timeline_2025-11-01.html"
+        mock_app.open_timeline(None)
 
-        with patch("chronometry.menubar_app.format_date", return_value="2025-11-01"):
-            with patch.object(mock_app, "config", {"timeline": {"output_dir": "./output"}}):
-                mock_path.return_value = mock_timeline_file
-
-                mock_app.open_timeline(None)
-
-                mock_browser.assert_called_once()
+        mock_browser.assert_called_once_with("http://localhost:8051/timeline")
 
 
 class TestStatistics:
@@ -511,10 +502,11 @@ class TestCaptureLoop:
     @patch("mss.mss")
     @patch("chronometry.common.get_monitor_config")
     @patch("chronometry.menubar_app.capture_iteration")
+    @patch("chronometry.common.cleanup_old_data")
     @patch("chronometry.menubar_app.time.sleep")
     @patch("chronometry.menubar_app.time.time")
     def test_capture_loop_periodic_cleanup(
-        self, mock_time, mock_sleep, mock_iteration, mock_get_monitor, mock_mss, mock_app
+        self, mock_time, mock_sleep, mock_cleanup, mock_iteration, mock_get_monitor, mock_mss, mock_app
     ):
         """Test that cleanup runs periodically."""
         mock_sct = Mock()
@@ -525,7 +517,7 @@ class TestCaptureLoop:
         mock_mss.return_value.__enter__.return_value = mock_sct
         mock_get_monitor.return_value = {"left": 0, "top": 0, "width": 1920, "height": 1080}
 
-        mock_time.side_effect = [0, 3700]
+        mock_time.return_value = 3700
 
         mock_iteration.return_value = {
             "status": "captured",
@@ -534,12 +526,18 @@ class TestCaptureLoop:
             "error": None,
         }
 
-        def stop_after_one(*args):
-            mock_app.stop_event.set()
+        call_count = [0]
 
-        mock_sleep.side_effect = stop_after_one
+        def stop_after_second_sleep(*args):
+            call_count[0] += 1
+            if call_count[0] >= 2:
+                mock_app.stop_event.set()
+
+        mock_sleep.side_effect = stop_after_second_sleep
 
         mock_app._capture_loop()
+
+        mock_cleanup.assert_called_once()
 
 
 class TestAnnotationLoop:
