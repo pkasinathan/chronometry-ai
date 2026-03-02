@@ -64,7 +64,6 @@ make check           # All quality checks (lint + typecheck)
 src/chronometry/     # Main package
 tests/               # Test suite
 config/              # Example runtime configs
-bin/                 # Legacy shell scripts (superseded by CLI)
 ```
 
 ## Coding Standards

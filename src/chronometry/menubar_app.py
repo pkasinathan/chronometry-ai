@@ -610,7 +610,7 @@ class ChronometryApp(rumps.App):
             except Exception:
                 pass
 
-        # Stop the service (same command as manage_services.sh stop)
+        # Stop the launchd service
         subprocess.run(["launchctl", "stop", "user.chronometry.menubar"])
         logger.info("Service stopped")
 
