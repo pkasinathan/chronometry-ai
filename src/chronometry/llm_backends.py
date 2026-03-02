@@ -165,7 +165,7 @@ def call_ollama_vision(
 
     local_config = config["annotation"].get("local_model", {})
     base_url = local_config.get("base_url", "http://localhost:11434")
-    model_name = model_override or local_config.get("model_name", "qwen3.5:35b-a3b")
+    model_name = model_override or local_config.get("model_name", "qwen2.5vl:7b")
     timeout = local_config.get("timeout_sec", 300)
 
     ensure_ollama_running(base_url)

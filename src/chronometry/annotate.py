@@ -124,8 +124,8 @@ def call_vision_api_with_retry(
     if max_retries is None:
         max_retries = local_config.get("max_retries", 3)
 
-    primary_model = local_config.get("model_name", "qwen3.5:35b-a3b")
-    fallback_model = local_config.get("fallback_model_name", "qwen2.5vl:7b")
+    primary_model = local_config.get("model_name", "qwen2.5vl:7b")
+    fallback_model = local_config.get("fallback_model_name", "moondream")
 
     models = [(primary_model, "primary"), (fallback_model, "fallback")]
 

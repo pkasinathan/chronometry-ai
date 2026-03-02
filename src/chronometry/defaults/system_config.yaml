@@ -23,8 +23,8 @@ annotation:
     # "ollama" or "openai_compatible" (vLLM, LM Studio, llama.cpp, etc.)
     provider: "ollama"
     base_url: "http://localhost:11434"
-    model_name: "qwen3.5:35b-a3b"
-    fallback_model_name: "qwen2.5vl:7b"
+    model_name: "qwen2.5vl:7b"
+    fallback_model_name: "moondream"
     timeout_sec: 300
     max_retries: 3
 
