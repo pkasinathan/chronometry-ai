@@ -75,8 +75,11 @@ class ChronometryApp(rumps.App):
         # Set initial title/icon
         self.title = "⏱️"
 
-        # Setup global hotkey (Cmd+Shift+6)
-        self.setup_hotkey()
+        # Setup global hotkey (Cmd+Shift+6) — non-fatal if Quartz unavailable
+        try:
+            self.setup_hotkey()
+        except Exception as e:
+            logger.warning("Global hotkey (Cmd+Shift+6) unavailable: %s", e)
 
     def setup_menu(self):
         """Setup the menu bar items."""

@@ -70,7 +70,7 @@ Chronometry captures periodic screenshots of your desktop, annotates them with a
 ### Prerequisites
 
 - **macOS** (menu bar app uses macOS-specific APIs)
-- **Python 3.10+** — check with `python3 --version`. If below 3.10, install it:
+- **Python 3.10–3.13** — check with `python3 --version`. pyobjc (required for macOS menu bar) does not yet support 3.14+.
   ```bash
   brew install python@3.10
   ```
@@ -96,9 +96,9 @@ pip3 install chronometry-ai
 # Or with uv
 uv pip install chronometry-ai
 
-# Or in a dedicated virtual environment
+# Or in a dedicated virtual environment (Python 3.10–3.13)
 mkdir -p ~/.chronometry
-python3 -m venv ~/.chronometry/venv
+python3.10 -m venv ~/.chronometry/venv
 source ~/.chronometry/venv/bin/activate
 pip install chronometry-ai
 ```
