@@ -24,6 +24,7 @@ from chronometry.common import (
     backup_config,
     bootstrap,
     count_unannotated_frames,
+    deep_merge,
     ensure_absolute_path,
     format_date,
     get_daily_dir,
@@ -147,6 +148,16 @@ def get_config():
                 "screenshot_analysis_prompt": config["annotation"].get(
                     "screenshot_analysis_prompt", "Summarize the type of task or activity shown in these images."
                 ),
+                "local_model": {
+                    "provider": config["annotation"].get("local_model", {}).get("provider", "ollama"),
+                    "model_name": config["annotation"].get("local_model", {}).get("model_name", "qwen3-vl:8b"),
+                    "fallback_model_name": config["annotation"].get("local_model", {}).get(
+                        "fallback_model_name", "qwen2.5vl:7b"
+                    ),
+                    "timeout_sec": config["annotation"].get("local_model", {}).get("timeout_sec", 300),
+                    "max_retries": config["annotation"].get("local_model", {}).get("max_retries", 3),
+                    "keep_alive": config["annotation"].get("local_model", {}).get("keep_alive", "1m"),
+                },
             },
             "timeline": {
                 "bucket_minutes": config["timeline"]["bucket_minutes"],
@@ -157,6 +168,12 @@ def get_config():
                 "interval_seconds": config.get("digest", {}).get("interval_seconds", 3600),
                 "digest_category_prompt": config.get("digest", {}).get("digest_category_prompt", ""),
                 "digest_overall_prompt": config.get("digest", {}).get("digest_overall_prompt", ""),
+                "local_model": {
+                    "provider": config.get("digest", {}).get("local_model", {}).get("provider", "ollama"),
+                    "model_name": config.get("digest", {}).get("local_model", {}).get("model_name", "qwen3-vl:8b"),
+                    "timeout_sec": config.get("digest", {}).get("local_model", {}).get("timeout_sec", 300),
+                    "keep_alive": config.get("digest", {}).get("local_model", {}).get("keep_alive", "1m"),
+                },
             },
             "notifications": {
                 "enabled": config.get("notifications", {}).get("enabled", True),
@@ -197,7 +214,7 @@ def update_config():
                     return jsonify({"status": "error", "message": f"'{section}' must be a JSON object"}), 400
                 if section not in current_config:
                     current_config[section] = {}
-                current_config[section].update(updates[section])
+                current_config[section] = deep_merge(current_config[section], updates[section])
 
         class literal_str(str):
             pass

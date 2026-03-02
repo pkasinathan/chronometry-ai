@@ -98,6 +98,8 @@ class TestDataEndpoints:
         assert "capture" in data
         assert "annotation" in data
         assert "timeline" in data
+        assert "local_model" in data["annotation"]
+        assert "local_model" in data["digest"]
 
     @patch("chronometry.web_server.load_annotations")
     @patch("chronometry.web_server.group_activities")
@@ -526,6 +528,55 @@ class TestConfigurationUpdate:
             assert updated["capture"]["capture_interval_seconds"] == 600
             mock_backup.assert_called_once_with(config_file)
             mock_init.assert_called_once()
+
+    @patch("chronometry.web_server.backup_config")
+    @patch("chronometry.web_server.init_config")
+    def test_update_config_deep_merges_local_model(self, mock_init, mock_backup, client, tmp_path):
+        """Test nested local_model updates preserve existing sibling keys."""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        config_file = config_dir / "user_config.yaml"
+        config_file.write_text(
+            yaml.safe_dump(
+                {
+                    "annotation": {
+                        "local_model": {
+                            "provider": "ollama",
+                            "model_name": "qwen3-vl:8b",
+                            "fallback_model_name": "qwen2.5vl:7b",
+                            "timeout_sec": 300,
+                            "max_retries": 3,
+                            "keep_alive": "1m",
+                        }
+                    },
+                    "digest": {"local_model": {"provider": "ollama", "model_name": "qwen3-vl:8b", "timeout_sec": 300}},
+                },
+                sort_keys=False,
+            )
+        )
+
+        payload = {
+            "annotation": {"local_model": {"keep_alive": "0", "timeout_sec": 120}},
+            "digest": {"local_model": {"keep_alive": "10m"}},
+        }
+
+        with patch("chronometry.web_server.CHRONOMETRY_HOME", tmp_path):
+            response = client.put(
+                "/api/config",
+                data=json.dumps(payload),
+                content_type="application/json",
+            )
+
+        assert response.status_code == 200
+        updated = yaml.safe_load(config_file.read_text())
+        assert updated["annotation"]["local_model"]["keep_alive"] == "0"
+        assert updated["annotation"]["local_model"]["timeout_sec"] == 120
+        assert updated["annotation"]["local_model"]["model_name"] == "qwen3-vl:8b"
+        assert updated["annotation"]["local_model"]["fallback_model_name"] == "qwen2.5vl:7b"
+        assert updated["digest"]["local_model"]["keep_alive"] == "10m"
+        assert updated["digest"]["local_model"]["model_name"] == "qwen3-vl:8b"
+        mock_backup.assert_called_once_with(config_file)
+        mock_init.assert_called_once()
 
 
 class TestWebSocketEvents:

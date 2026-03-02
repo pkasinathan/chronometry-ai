@@ -1277,6 +1277,34 @@
                             <label>Post-Processing Prompt</label>
                             <textarea v-model="settings.annotation.rewrite_screenshot_analysis_prompt" rows="6"></textarea>
                             </div>
+                        <div class="settings-field" style="padding-top:0.75rem;border-top:1px solid var(--border-subtle);">
+                            <label>LLM Provider</label>
+                            <select v-model="settings.annotation.local_model.provider">
+                                <option value="ollama">Ollama</option>
+                                <option value="openai_compatible">OpenAI-compatible</option>
+                            </select>
+                        </div>
+                        <div class="settings-field">
+                            <label>Model Name</label>
+                            <input type="text" v-model="settings.annotation.local_model.model_name" placeholder="qwen3-vl:8b">
+                        </div>
+                        <div class="settings-field">
+                            <label>Fallback Model Name</label>
+                            <input type="text" v-model="settings.annotation.local_model.fallback_model_name" placeholder="qwen2.5vl:7b">
+                        </div>
+                        <div class="settings-field">
+                            <label>Timeout (seconds)</label>
+                            <input type="number" v-model.number="settings.annotation.local_model.timeout_sec" min="1">
+                        </div>
+                        <div class="settings-field">
+                            <label>Max Retries (per model)</label>
+                            <input type="number" v-model.number="settings.annotation.local_model.max_retries" min="1">
+                        </div>
+                        <div class="settings-field">
+                            <label>Keep Alive</label>
+                            <input type="text" v-model="settings.annotation.local_model.keep_alive" placeholder="1m">
+                            <div class="settings-hint">Examples: 0 (unload immediately), 1m, 10m, -1 (keep loaded)</div>
+                        </div>
                         </div>
                         
                     <!-- Timeline -->
@@ -1346,6 +1374,25 @@
                                     <textarea v-model="settings.digest.digest_overall_prompt" rows="8" style="font-family:monospace;font-size:0.82rem"></textarea>
                                     <div class="settings-hint">Placeholders: {total_activities}, {focus_percentage}, {top_categories}, {sample_activities}</div>
                                 </div>
+                                <div class="settings-field" style="padding-top:0.75rem;border-top:1px solid var(--border-subtle);">
+                                    <label>LLM Provider</label>
+                                    <select v-model="settings.digest.local_model.provider">
+                                        <option value="ollama">Ollama</option>
+                                        <option value="openai_compatible">OpenAI-compatible</option>
+                                    </select>
+                                </div>
+                                <div class="settings-field">
+                                    <label>Model Name</label>
+                                    <input type="text" v-model="settings.digest.local_model.model_name" placeholder="qwen3-vl:8b">
+                                </div>
+                                <div class="settings-field">
+                                    <label>Timeout (seconds)</label>
+                                    <input type="number" v-model.number="settings.digest.local_model.timeout_sec" min="1">
+                                </div>
+                                <div class="settings-field">
+                                    <label>Keep Alive</label>
+                                    <input type="text" v-model="settings.digest.local_model.keep_alive" placeholder="1m">
+                                </div>
                                 </div>
                 </article>
 
@@ -1405,9 +1452,32 @@
                     searchResults: [],
                     settings: {
                         capture: { capture_interval_seconds: 900, monitor_index: 1, retention_days: 1095 },
-                        annotation: { screenshot_analysis_batch_size: 2, rewrite_screenshot_analysis_format_summary: false, rewrite_screenshot_analysis_prompt: '', screenshot_analysis_prompt: '' },
+                        annotation: {
+                            screenshot_analysis_batch_size: 2,
+                            rewrite_screenshot_analysis_format_summary: false,
+                            rewrite_screenshot_analysis_prompt: '',
+                            screenshot_analysis_prompt: '',
+                            local_model: {
+                                provider: 'ollama',
+                                model_name: 'qwen3-vl:8b',
+                                fallback_model_name: 'qwen2.5vl:7b',
+                                timeout_sec: 300,
+                                max_retries: 3,
+                                keep_alive: '1m'
+                            }
+                        },
                         timeline: { bucket_minutes: 30, exclude_keywords_text: '' },
-                        digest: { interval_seconds: 3600, digest_category_prompt: '', digest_overall_prompt: '' },
+                        digest: {
+                            interval_seconds: 3600,
+                            digest_category_prompt: '',
+                            digest_overall_prompt: '',
+                            local_model: {
+                                provider: 'ollama',
+                                model_name: 'qwen3-vl:8b',
+                                timeout_sec: 300,
+                                keep_alive: '1m'
+                            }
+                        },
                         notifications: { enabled: true, notify_before_capture: true, pre_capture_warning_seconds: 5, pre_capture_sound: false }
                     },
                     availableDates: [],

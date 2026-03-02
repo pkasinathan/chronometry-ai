@@ -371,12 +371,13 @@ class TestConcurrentAccess:
         """Test that concurrent logging doesn't corrupt data."""
         tracker = TokenUsageTracker(str(tmp_path))
         errors = []
+        test_date = datetime.now()
 
         def log_tokens_thread(api_type, tokens):
             try:
-                with patch("chronometry.token_usage.datetime") as mock_dt:
-                    mock_dt.now.return_value = datetime(2025, 11, 1, 10, 0)
-                    tracker.log_tokens(api_type, tokens)
+                # Don't patch module-level datetime in multiple threads:
+                # per-thread patching can race and leak MagicMocks across threads.
+                tracker.log_tokens(api_type, tokens)
             except Exception as e:
                 errors.append(e)
 
@@ -395,7 +396,7 @@ class TestConcurrentAccess:
         assert len(errors) == 0
 
         # Verify total is correct
-        usage = tracker.get_daily_usage(datetime(2025, 11, 1))
+        usage = tracker.get_daily_usage(test_date)
         assert usage["total_tokens"] == 100  # 10 threads * 10 tokens
         assert len(usage["calls"]) == 10
 

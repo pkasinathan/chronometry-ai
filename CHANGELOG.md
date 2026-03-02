@@ -4,6 +4,21 @@ All notable changes to Chronometry will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.20] - 2026-03-02
+
+### Added
+- Settings UI now exposes LLM/Ollama controls for annotation and digest: provider, model name, timeout, and keep-alive; annotation also includes fallback model and retry count.
+- API config payload now includes nested `annotation.local_model` and `digest.local_model` fields used by the Settings page.
+- Regression tests for local-model config exposure and nested deep-merge update behavior.
+
+### Changed
+- Ollama chat requests now send configurable `keep_alive` and default to `1m` for both annotation and digest flows.
+- Config update writes now use deep merge semantics for nested objects, preventing accidental loss of sibling `local_model` keys.
+- Default config now includes explicit `keep_alive: "1m"` in annotation and digest local model settings.
+
+### Fixed
+- Stabilized concurrent token-usage test by removing thread-unsafe datetime monkeypatching that caused intermittent `MagicMock` JSON serialization errors.
+
 ## [1.0.19] - 2026-03-02
 
 ### Added

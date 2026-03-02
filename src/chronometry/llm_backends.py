@@ -200,6 +200,7 @@ def call_ollama_vision(
     base_url = local_config.get("base_url", "http://localhost:11434")
     model_name = model_override or local_config.get("model_name", "qwen3-vl:8b")
     timeout = local_config.get("timeout_sec", 300)
+    keep_alive = local_config.get("keep_alive", "1m")
 
     ensure_ollama_running(base_url)
 
@@ -217,6 +218,8 @@ def call_ollama_vision(
         "stream": False,
         "think": False,
     }
+    if keep_alive is not None:
+        payload["keep_alive"] = keep_alive
 
     with _inference_lock:
         response = requests.post(f"{base_url}/api/chat", json=payload, timeout=timeout)
@@ -257,6 +260,7 @@ def call_ollama_text(
     base_url = local_config.get("base_url", "http://localhost:11434")
     model_name = local_config.get("model_name", "qwen3:8b")
     timeout = local_config.get("timeout_sec", 300)
+    keep_alive = local_config.get("keep_alive", "1m")
 
     ensure_ollama_running(base_url)
 
@@ -274,7 +278,15 @@ def call_ollama_text(
 
     logger.info(f"Ollama text: POST {base_url}/api/chat model={model_name}")
 
-    payload = {"model": model_name, "messages": messages, "stream": False, "think": False, "options": options}
+    payload = {
+        "model": model_name,
+        "messages": messages,
+        "stream": False,
+        "think": False,
+        "options": options,
+    }
+    if keep_alive is not None:
+        payload["keep_alive"] = keep_alive
 
     response = requests.post(f"{base_url}/api/chat", json=payload, timeout=timeout)
 

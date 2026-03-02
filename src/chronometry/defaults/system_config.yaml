@@ -114,6 +114,7 @@ annotation:
     model_name: "qwen3-vl:8b"
     fallback_model_name: "qwen2.5vl:7b"
     timeout_sec: 300
+    keep_alive: "1m"
     max_retries: 3
 
 digest:
@@ -152,6 +153,7 @@ digest:
     base_url: "http://localhost:11434"
     model_name: "qwen3-vl:8b"
     timeout_sec: 300
+    keep_alive: "1m"
 
 timeline:
   bucket_minutes: 30
