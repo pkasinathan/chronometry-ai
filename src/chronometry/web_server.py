@@ -6,7 +6,6 @@ import io
 import logging
 import os
 import re
-import shutil
 import threading
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -22,6 +21,8 @@ from flask_socketio import SocketIO, emit
 from chronometry import CHRONOMETRY_HOME
 from chronometry.annotate import annotate_frames
 from chronometry.common import (
+    backup_config,
+    bootstrap,
     count_unannotated_frames,
     ensure_absolute_path,
     format_date,
@@ -50,6 +51,7 @@ socketio = SocketIO(app, cors_allowed_origins=_ALLOWED_ORIGINS)
 # Global config
 config = None
 _annotation_running = False
+_annotation_lock = threading.Lock()
 
 _TIMESTAMP_RE = re.compile(r"^\d{8}_\d{6}$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -89,6 +91,12 @@ def init_config():
 
         server_config = config.get("server", {})
         app.config["SECRET_KEY"] = server_config.get("secret_key", "change-me-in-production")
+
+        if app.config["SECRET_KEY"] == "change-me-in-production":
+            logger.warning(
+                "SECRET_KEY is the insecure default! "
+                "Run 'chrono init' or set server.secret_key in user_config.yaml."
+            )
 
         logger.info(f"Configuration loaded successfully. Root dir: {config.get('root_dir')}")
     except Exception as e:
@@ -147,6 +155,8 @@ def get_config():
             "digest": {
                 "backend": config.get("digest", {}).get("backend", "local"),
                 "interval_seconds": config.get("digest", {}).get("interval_seconds", 3600),
+                "digest_category_prompt": config.get("digest", {}).get("digest_category_prompt", ""),
+                "digest_overall_prompt": config.get("digest", {}).get("digest_overall_prompt", ""),
             },
             "notifications": {
                 "enabled": config.get("notifications", {}).get("enabled", True),
@@ -167,6 +177,8 @@ def update_config():
     """
     try:
         updates = request.json
+        if not isinstance(updates, dict):
+            return jsonify({"status": "error", "message": "Request body must be a JSON object"}), 400
 
         config_dir = CHRONOMETRY_HOME / "config"
         user_config_path = config_dir / "user_config.yaml"
@@ -174,24 +186,15 @@ def update_config():
         if not user_config_path.exists():
             return jsonify({"status": "error", "message": "No user_config.yaml found. Run 'chrono init' first."}), 404
 
-        backup_dir = config_dir / "backup"
-        backup_dir.mkdir(parents=True, exist_ok=True)
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_filename = f"user_config.{timestamp}.yaml"
-        backup_path = backup_dir / backup_filename
-
-        try:
-            shutil.copy2(str(user_config_path), str(backup_path))
-            logger.info(f"Created backup: {backup_path}")
-        except Exception as e:
-            logger.warning(f"Failed to create backup: {e}")
+        backup_config(user_config_path)
 
         with open(user_config_path) as f:
-            current_config = yaml.safe_load(f)
+            current_config = yaml.safe_load(f) or {}
 
         for section in ("capture", "annotation", "timeline", "digest", "notifications"):
             if section in updates:
+                if not isinstance(updates[section], dict):
+                    return jsonify({"status": "error", "message": f"'{section}' must be a JSON object"}), 400
                 if section not in current_config:
                     current_config[section] = {}
                 current_config[section].update(updates[section])
@@ -216,6 +219,11 @@ def update_config():
                     current_config["annotation"]["rewrite_screenshot_analysis_prompt"]
                 )
 
+        if "digest" in current_config:
+            for key in ("digest_category_prompt", "digest_overall_prompt"):
+                if key in current_config["digest"]:
+                    current_config["digest"][key] = literal_str(current_config["digest"][key])
+
         with open(user_config_path, "w") as f:
             yaml.dump(current_config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
@@ -227,15 +235,35 @@ def update_config():
         return jsonify({"status": "error", "message": "Failed to update configuration"}), 500
 
 
+@app.route("/api/config/reset", methods=["POST"])
+def reset_config():
+    """Reset configuration to defaults with backup.
+
+    Backs up both user_config.yaml and system_config.yaml before
+    restoring package defaults via bootstrap(force=True).
+    """
+    try:
+        bootstrap(force=True)
+        init_config()
+
+        return jsonify({
+            "status": "success",
+            "message": "Configuration reset to defaults",
+        })
+    except Exception as e:
+        logger.error(f"Error resetting config: {e}")
+        return jsonify({"status": "error", "message": "Failed to reset configuration"}), 500
+
+
 @app.route("/api/annotate/run", methods=["POST"])
 def run_annotation():
     """Trigger annotation, timeline, and digest in a background thread."""
     global _annotation_running
 
-    if _annotation_running:
-        return jsonify({"status": "already_running"})
-
-    _annotation_running = True
+    with _annotation_lock:
+        if _annotation_running:
+            return jsonify({"status": "already_running"})
+        _annotation_running = True
 
     def _run():
         global _annotation_running
@@ -257,7 +285,8 @@ def run_annotation():
             socketio.emit("annotation_complete", {"error": "Annotation failed"})
             show_notification("Chronometry", f"Annotation failed: {e!s}")
         finally:
-            _annotation_running = False
+            with _annotation_lock:
+                _annotation_running = False
 
     threading.Thread(target=_run, daemon=True).start()
     return jsonify({"status": "started"})
@@ -651,12 +680,15 @@ def get_frames():
                 "timestamp": timestamp,
                 "datetime": parse_timestamp(timestamp).isoformat(),
                 "summary": data.get("summary", ""),
-                "image_file": data.get("image_file", ""),
+                "image_file": data.get("image_file") or "",
             }
             if data.get("metadata"):
                 frame_info["metadata"] = data["metadata"]
             if data.get("inference_image"):
                 frame_info["inference_image"] = data["inference_image"]
+            if data.get("synthetic"):
+                frame_info["synthetic"] = True
+                frame_info["reason"] = data.get("reason", "")
             frames.append(frame_info)
 
         return jsonify({"frames": frames})
@@ -750,6 +782,17 @@ def get_available_dates():
     except Exception as e:
         logger.error(f"Error getting dates: {e}")
         return jsonify({"error": "Failed to load dates"}), 500
+
+
+@app.route("/api/system-health")
+def get_system_health():
+    """Get live runtime health statistics."""
+    try:
+        from chronometry.runtime_stats import stats
+        return jsonify(stats.snapshot())
+    except Exception as e:
+        logger.error(f"Error getting system health: {e}")
+        return jsonify({"error": "Failed to load system health"}), 500
 
 
 @app.route("/api/digest")

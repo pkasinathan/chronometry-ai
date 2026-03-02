@@ -198,7 +198,7 @@ def call_ollama_vision(
 
     local_config = config["annotation"].get("local_model", {})
     base_url = local_config.get("base_url", "http://localhost:11434")
-    model_name = model_override or local_config.get("model_name", "qwen2.5vl:7b")
+    model_name = model_override or local_config.get("model_name", "qwen3-vl:8b")
     timeout = local_config.get("timeout_sec", 300)
 
     ensure_ollama_running(base_url)
@@ -215,6 +215,7 @@ def call_ollama_vision(
         "model": model_name,
         "messages": [{"role": "user", "content": prompt, "images": [img["base64_data"] for img in images]}],
         "stream": False,
+        "think": False,
     }
 
     with _inference_lock:
@@ -254,7 +255,7 @@ def call_ollama_text(
     """
     local_config = config.get("digest", {}).get("local_model", {})
     base_url = local_config.get("base_url", "http://localhost:11434")
-    model_name = local_config.get("model_name", "qwen2.5:7b")
+    model_name = local_config.get("model_name", "qwen3:8b")
     timeout = local_config.get("timeout_sec", 300)
 
     ensure_ollama_running(base_url)
@@ -273,7 +274,7 @@ def call_ollama_text(
 
     logger.info(f"Ollama text: POST {base_url}/api/chat model={model_name}")
 
-    payload = {"model": model_name, "messages": messages, "stream": False, "options": options}
+    payload = {"model": model_name, "messages": messages, "stream": False, "think": False, "options": options}
 
     response = requests.post(f"{base_url}/api/chat", json=payload, timeout=timeout)
 
@@ -316,13 +317,16 @@ def call_ollama_text(
 # ---------------------------------------------------------------------------
 
 
-def call_openai_vision(images: list[dict], config: dict, prompt_override: str | None = None) -> dict:
+def call_openai_vision(
+    images: list[dict], config: dict, prompt_override: str | None = None, model_override: str | None = None
+) -> dict:
     """Call an OpenAI-compatible vision endpoint with base64 images.
 
     Args:
         images: List of image dicts with base64_data and content_type
         config: Configuration dictionary
         prompt_override: If set, use this prompt instead of the one in config
+        model_override: If set, use this model instead of the one in config
 
     Returns:
         {"summary": str, "sources": list}
@@ -333,7 +337,7 @@ def call_openai_vision(images: list[dict], config: dict, prompt_override: str | 
 
     local_config = config["annotation"].get("local_model", {})
     base_url = local_config.get("base_url", "http://localhost:8000")
-    model_name = local_config.get("model_name", "Qwen/Qwen2.5-VL-7B-Instruct")
+    model_name = model_override or local_config.get("model_name", "Qwen/Qwen3-VL-8B-Instruct")
     timeout = local_config.get("timeout_sec", 300)
 
     prompt = (
@@ -389,7 +393,7 @@ def call_openai_text(
     """
     local_config = config.get("digest", {}).get("local_model", {})
     base_url = local_config.get("base_url", "http://localhost:8000")
-    model_name = local_config.get("model_name", "Qwen/Qwen2.5-7B-Instruct")
+    model_name = local_config.get("model_name", "Qwen/Qwen3-8B-Instruct")
     timeout = local_config.get("timeout_sec", 300)
 
     digest_config = config.get("digest", {})
@@ -436,14 +440,24 @@ def call_vision_api(
     Returns:
         {"summary": str, "sources": list}
     """
+    from chronometry.runtime_stats import stats
+
     provider = config["annotation"].get("local_model", {}).get("provider", "ollama")
     logger.info(f"Vision API provider: {provider}")
 
-    if provider == "ollama":
-        return call_ollama_vision(images, config, prompt_override=prompt_override, model_override=model_override)
-    if provider == "openai_compatible":
-        return call_openai_vision(images, config, prompt_override=prompt_override)
-    raise ValueError(f"Unknown vision provider: {provider}")
+    stats.record("llm.vision_calls")
+    try:
+        if provider == "ollama":
+            result = call_ollama_vision(images, config, prompt_override=prompt_override, model_override=model_override)
+        elif provider == "openai_compatible":
+            result = call_openai_vision(images, config, prompt_override=prompt_override, model_override=model_override)
+        else:
+            raise ValueError(f"Unknown vision provider: {provider}")
+        stats.record("llm.vision_succeeded")
+        return result
+    except Exception:
+        stats.record("llm.vision_failed")
+        raise
 
 
 def call_text_api(
@@ -458,14 +472,32 @@ def call_text_api(
     Returns:
         {"content": str, "tokens": int, "prompt_tokens": int, "completion_tokens": int}
     """
+    from chronometry.runtime_stats import stats
+
     provider = config.get("digest", {}).get("local_model", {}).get("provider", "ollama")
     logger.info(f"Text API provider: {provider}")
 
-    if provider == "ollama":
-        return call_ollama_text(prompt, config, max_tokens, system_prompt, context)
-    if provider == "openai_compatible":
-        return call_openai_text(prompt, config, max_tokens, system_prompt, context)
-    raise ValueError(f"Unknown text provider: {provider}")
+    stats.record("llm.text_calls")
+    try:
+        if provider == "ollama":
+            result = call_ollama_text(prompt, config, max_tokens, system_prompt, context)
+        elif provider == "openai_compatible":
+            result = call_openai_text(prompt, config, max_tokens, system_prompt, context)
+        else:
+            raise ValueError(f"Unknown text provider: {provider}")
+
+        if not result.get("content") and result.get("tokens", 0) > 0:
+            stats.record("llm.text_empty_content")
+            logger.warning(
+                f"Text LLM returned empty content with {result['tokens']} tokens "
+                f"(likely thinking-mode exhaustion)"
+            )
+
+        stats.record("llm.text_succeeded")
+        return result
+    except Exception:
+        stats.record("llm.text_failed")
+        raise
 
 
 # ---------------------------------------------------------------------------

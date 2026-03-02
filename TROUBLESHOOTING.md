@@ -26,16 +26,16 @@ python3 -m pip install chronometry-ai
 
 ---
 
-## Python 3.10+ not installed
+## Python 3.10-3.13 not installed
 
 ### Symptoms
 
-- `python3 --version` shows a version below 3.10, or `python3: command not found`
+- `python3 --version` shows a version outside 3.10-3.13, or `python3: command not found`
 - Installing chronometry fails with a Python version error
 
 ### Fix
 
-Install Python 3.10+ via Homebrew (recommended on macOS):
+Install Python 3.10-3.13 via Homebrew (recommended on macOS):
 
 ```bash
 brew install python@3.10
@@ -46,7 +46,7 @@ After installation, it's available as `python3.10` and `pip3.10`. Create a virtu
 ```bash
 python3.10 -m venv ~/.chronometry-venv
 source ~/.chronometry-venv/bin/activate
-pip install chronometry-ai
+pip3 install chronometry-ai
 ```
 
 Alternatively, use **pyenv** to manage multiple Python versions:
@@ -55,7 +55,7 @@ Alternatively, use **pyenv** to manage multiple Python versions:
 brew install pyenv
 pyenv install 3.10
 pyenv global 3.10
-pip install chronometry-ai
+pip3 install chronometry-ai
 ```
 
 Or use **uv** (fastest):
@@ -64,6 +64,43 @@ Or use **uv** (fastest):
 uv python install 3.10
 uv pip install chronometry-ai
 ```
+
+---
+
+## Dashboard shows errors or stale health
+
+### Symptoms
+
+- **Settings > System Health** shows zeros unexpectedly
+- Dashboard actions (annotate/reset/save) appear to fail silently
+
+### Checks
+
+1. Confirm services are running:
+   ```bash
+   chrono status
+   ```
+2. Inspect logs:
+   ```bash
+   chrono logs webserver
+   chrono logs menubar
+   ```
+3. Verify health endpoint directly:
+   ```bash
+   curl -s http://localhost:8051/api/system-health
+   ```
+
+### Fix
+
+- Restart services to reload config and reconnect runtime counters:
+  ```bash
+  chrono service restart
+  ```
+- If configuration is corrupted, reset defaults (with backup):
+  ```bash
+  chrono init --force
+  chrono service restart
+  ```
 
 ---
 

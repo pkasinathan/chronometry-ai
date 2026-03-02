@@ -474,7 +474,10 @@ def capture_iteration(
             - 'frame_path': Path if captured, None otherwise
             - 'error': Exception if error occurred, None otherwise
     """
+    from chronometry.runtime_stats import stats
+
     result = {"status": None, "showed_pre_notification": False, "frame_path": None, "error": None}
+    stats.record("capture.attempted")
 
     try:
         # Check if screen is locked
@@ -483,6 +486,7 @@ def capture_iteration(
             if notifications_enabled:
                 show_notification("Chronometry", NotificationMessages.SCREEN_LOCKED)
             result["status"] = "skipped_locked"
+            stats.record("capture.skipped_locked")
             return result
 
         # Check if camera is in use (video calls, etc.)
@@ -500,6 +504,7 @@ def capture_iteration(
                 summary="In a video meeting or call - screenshot skipped for privacy",
             )
             result["status"] = "skipped_camera"
+            stats.record("capture.skipped_camera")
             return result
 
         # Optional per-capture pre-notification (skip on first capture)
@@ -557,12 +562,14 @@ def capture_iteration(
 
         result["status"] = "captured"
         result["frame_path"] = frame_path
+        stats.record("capture.succeeded")
         return result
 
     except Exception as e:
         logger.error(f"Error in capture iteration: {e}")
         result["status"] = "error"
         result["error"] = e
+        stats.record("capture.failed")
         return result
 
 

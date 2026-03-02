@@ -567,5 +567,132 @@ class TestConfigHelpers:
         assert result["retention_days"] == 1095  # Default
 
 
+class TestBackupConfig:
+    """Tests for backup_config() function."""
+
+    def test_backup_creates_timestamped_copy(self, tmp_path):
+        """Test that backup creates a file in backup/ dir with timestamp in name."""
+        config_file = tmp_path / "user_config.yaml"
+        config_file.write_text("capture:\n  interval: 900\n")
+
+        from chronometry.common import backup_config
+        result = backup_config(config_file)
+
+        assert result is not None
+        assert result.exists()
+        assert result.parent.name == "backup"
+        assert "user_config." in result.name
+        assert result.suffix == ".yaml"
+        assert result.read_text() == config_file.read_text()
+
+    def test_backup_returns_none_for_missing_file(self, tmp_path):
+        """Test that backup returns None when source file doesn't exist."""
+        from chronometry.common import backup_config
+        result = backup_config(tmp_path / "nonexistent.yaml")
+        assert result is None
+
+    def test_backup_creates_backup_dir(self, tmp_path):
+        """Test that backup creates the backup/ subdirectory if it doesn't exist."""
+        config_file = tmp_path / "config" / "user_config.yaml"
+        config_file.parent.mkdir(parents=True)
+        config_file.write_text("test: true\n")
+
+        from chronometry.common import backup_config
+        result = backup_config(config_file)
+
+        assert result is not None
+        assert (config_file.parent / "backup").is_dir()
+
+    def test_backup_paths_are_unique_for_rapid_calls(self, tmp_path):
+        """Two immediate backup calls should not overwrite each other."""
+        from chronometry.common import backup_config
+
+        config_file = tmp_path / "user_config.yaml"
+        config_file.write_text("capture:\n  interval: 900\n")
+
+        first = backup_config(config_file)
+        second = backup_config(config_file)
+
+        assert first is not None
+        assert second is not None
+        assert first != second
+        assert first.exists()
+        assert second.exists()
+
+
+class TestLoadConfigEmptyGuard:
+    """Tests for or {} guard when YAML files are empty."""
+
+    def test_load_config_with_empty_user_config(self, tmp_path, monkeypatch):
+        """Test that empty user_config.yaml (returns None from yaml.safe_load) is handled."""
+        from chronometry.common import load_config
+
+        config_dir = tmp_path / ".chronometry" / "config"
+        config_dir.mkdir(parents=True)
+
+        system_config = {
+            "capture": {"capture_interval_seconds": 900},
+            "annotation": {"backend": "local"},
+            "timeline": {"bucket_minutes": 15},
+            "paths": {"root_dir": str(tmp_path / "data")},
+        }
+        import yaml
+        (config_dir / "system_config.yaml").write_text(yaml.dump(system_config))
+
+        # Write empty user config (comments only - returns None from yaml.safe_load)
+        (config_dir / "user_config.yaml").write_text("# Empty config\n")
+
+        result = load_config(
+            user_config_path=config_dir / "user_config.yaml",
+            system_config_path=config_dir / "system_config.yaml",
+        )
+
+        assert isinstance(result, dict)
+        assert result["capture"]["capture_interval_seconds"] == 900
+
+    def test_load_config_with_empty_system_config_does_not_crash(self, tmp_path):
+        """Test that empty system_config.yaml is handled with or {} guard.
+
+        Without the ``or {}`` guard, yaml.safe_load returning None would
+        cause an AttributeError in deep_merge.  With the guard the merge
+        succeeds but validation correctly raises ValueError for missing
+        required sections.
+        """
+        from chronometry.common import load_config
+
+        config_dir = tmp_path / ".chronometry" / "config"
+        config_dir.mkdir(parents=True)
+
+        # Both empty - system_config or {} guard should prevent AttributeError
+        (config_dir / "system_config.yaml").write_text("# Empty\n")
+        (config_dir / "user_config.yaml").write_text("# Empty\n")
+
+        # Should raise ValueError (missing sections) rather than AttributeError
+        with pytest.raises(ValueError, match="[Mm]issing"):
+            load_config(
+                user_config_path=config_dir / "user_config.yaml",
+                system_config_path=config_dir / "system_config.yaml",
+            )
+
+
+class TestDefaultConfigParity:
+    """Keep repo and packaged default system configs semantically aligned."""
+
+    def test_repo_and_packaged_system_defaults_match(self):
+        repo_default = Path(__file__).resolve().parents[1] / "config" / "system_config.yaml"
+        packaged_default = Path(__file__).resolve().parents[1] / "src" / "chronometry" / "defaults" / "system_config.yaml"
+
+        with open(repo_default, encoding="utf-8") as f:
+            repo_data = yaml.safe_load(f) or {}
+        with open(packaged_default, encoding="utf-8") as f:
+            packaged_data = yaml.safe_load(f) or {}
+
+        # secret_key may be rewritten at bootstrap; compare logical config parity.
+        repo_data.setdefault("server", {})["secret_key"] = "<redacted>"
+        packaged_data.setdefault("server", {})["secret_key"] = "<redacted>"
+
+        assert repo_data == packaged_data
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

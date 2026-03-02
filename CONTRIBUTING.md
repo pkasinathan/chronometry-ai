@@ -63,12 +63,12 @@ make check           # All quality checks (lint + typecheck)
 ```
 src/chronometry/     # Main package
 tests/               # Test suite
-config/              # Example runtime configs
+config/              # Runtime config examples (system_config.yaml = defaults, user_config.yaml = overrides)
 ```
 
 ## Coding Standards
 
-- **Python 3.10+** — Use type hints; `from __future__ import annotations` in every module.
+- **Python 3.10-3.13** — Use type hints; `from __future__ import annotations` in every module.
 - **Formatting** — Ruff handles formatting. Run `make format` before committing.
 - **Line length** — 120 characters max.
 - **Imports** — Sorted by ruff (isort rules). First-party imports from `chronometry`.
@@ -93,10 +93,12 @@ Prefixes: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`, `ci`.
 ## Pull Request Guidelines
 
 - Keep PRs focused — one feature or fix per PR.
-- Update `CHANGELOG.md` under an `[Unreleased]` section.
+- Update `CHANGELOG.md` in the appropriate section for the target release.
 - Add or update tests for any behavior changes.
 - Ensure CI passes before requesting review.
 - Reference related issues (e.g., "Fixes #42").
+
+For maintainers preparing a release, follow `RELEASE.md`.
 
 ## Architecture Notes
 

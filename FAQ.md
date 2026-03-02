@@ -24,7 +24,7 @@ Chronometry is a privacy-first activity tracker for macOS. It periodically captu
 ### What are the prerequisites?
 
 - **macOS** (the menu bar app and capture engine use macOS-specific APIs)
-- **Python 3.10+**
+- **Python 3.10-3.13** (pyobjc for menu bar/hotkey does not yet support Python 3.14+)
 - **Ollama** — local LLM runtime for AI annotation
 
 Install Ollama and pull the vision model:
@@ -32,7 +32,8 @@ Install Ollama and pull the vision model:
 ```bash
 brew install ollama
 brew services start ollama   # runs as a background service, auto-starts at login
-ollama pull qwen2.5vl:7b
+ollama pull qwen3-vl:8b
+ollama pull qwen2.5vl:7b    # fallback model
 ```
 
 ### How do I install Chronometry?
@@ -128,7 +129,7 @@ Service names are `webserver` and `menubar`. Omit the name to act on all service
 
 ### How often are screenshots taken?
 
-Every **900 seconds (15 minutes)** by default. Change this in `~/.chronometry/config/user_config.yaml`:
+Every **900 seconds (15 minutes)** by default. Override in `~/.chronometry/config/user_config.yaml`:
 
 ```yaml
 capture:
@@ -183,7 +184,7 @@ This metadata is saved as `_meta.json` and injected into the VLM prompt, reducin
 
 ### Can I capture from a specific monitor?
 
-Yes. Set `monitor_index` in `user_config.yaml`:
+Yes. Override `monitor_index` in `user_config.yaml`:
 
 ```yaml
 capture:
@@ -194,7 +195,7 @@ If you specify an index that doesn't exist, the capture engine logs an error and
 
 ### Can I capture a specific screen region?
 
-Yes. Set a custom region in `system_config.yaml`:
+Yes. Override the region in `user_config.yaml`:
 
 ```yaml
 capture:
@@ -245,7 +246,7 @@ The captured image is saved to the current date's frames folder with the same na
 
 ### Can I get a warning before capture?
 
-Yes. By default, a notification appears **5 seconds** before each automatic capture. Configure this in `user_config.yaml`:
+Yes. By default, a notification appears **5 seconds** before each automatic capture. Override in `user_config.yaml`:
 
 ```yaml
 notifications:
@@ -297,7 +298,7 @@ Chronometry sends a downscaled JPEG (1280px) to a local vision model (Ollama by 
 | **manual** (default) | Annotation only runs when you trigger it — via the menu bar ("Run Annotation Now"), the CLI (`chrono annotate`), or the dashboard |
 | **auto** | The menu bar app automatically runs annotation every few hours (default: 4 hours) when unannotated frames exist |
 
-Set the mode in `user_config.yaml`:
+Override the mode in `user_config.yaml`:
 
 ```yaml
 annotation:
@@ -320,7 +321,7 @@ Yesterday's unannotated frames are processed first, then today's, in chronologic
 
 ### Can I customize the analysis prompt?
 
-Yes. Edit the `screenshot_analysis_prompt` field in `user_config.yaml`. The default V2 prompt requests structured JSON output and includes `{metadata_block}` and `{recent_context}` placeholders that are automatically filled at annotation time:
+Yes. Override the `screenshot_analysis_prompt` in `user_config.yaml`. The default prompt (in `system_config.yaml`) includes `{metadata_block}` and `{recent_context}` placeholders that are automatically filled at annotation time:
 
 ```yaml
 annotation:
@@ -357,22 +358,23 @@ annotation:
   local_model:
     provider: "ollama"
     base_url: "http://localhost:11434"
-    model_name: "qwen2.5vl:7b"
-    timeout_sec: 120
+    model_name: "qwen3-vl:8b"
+    fallback_model_name: "qwen2.5vl:7b"
+    timeout_sec: 300
 
 digest:
   local_model:
     provider: "ollama"
     base_url: "http://localhost:11434"
-    model_name: "qwen2.5:7b"
-    timeout_sec: 120
+    model_name: "qwen3-vl:8b"
+    timeout_sec: 300
 ```
 
 ### How do I set up Ollama?
 
 1. Install: `brew install ollama`
 2. Start as a background service: `brew services start ollama` (auto-starts at login)
-3. Pull the vision model: `ollama pull qwen2.5vl:7b`
+3. Pull the models: `ollama pull qwen3-vl:8b && ollama pull qwen2.5vl:7b`
 4. Verify: `chrono validate` checks that Ollama is reachable and models are available
 
 Chronometry will attempt to auto-start Ollama if it's installed but not running.
@@ -386,7 +388,7 @@ annotation:
   local_model:
     provider: "openai_compatible"
     base_url: "http://localhost:8000"
-    model_name: "Qwen/Qwen2.5-VL-7B-Instruct"
+    model_name: "Qwen/Qwen3-VL-8B-Instruct"
     timeout_sec: 120
 ```
 
@@ -398,7 +400,7 @@ Chronometry detects Ollama runner crashes (HTTP 500 with "no longer running") an
 
 ### What is summary post-processing?
 
-An optional feature that reformats the raw vision model output using a text model. Enable it in `user_config.yaml`:
+An optional feature that reformats the raw vision model output using a text model. Override in `user_config.yaml`:
 
 ```yaml
 annotation:
@@ -439,7 +441,7 @@ Or view it on the dashboard's **Timeline** tab.
 
 Consecutive annotations with the same category are merged into a single activity block if they fall within the **gap threshold** (default: 5 minutes). For example, three consecutive "Code" annotations 15 minutes apart are merged into one coding session.
 
-The gap threshold is configured in `system_config.yaml`:
+The gap threshold default is in `system_config.yaml` (override in `user_config.yaml`):
 
 ```yaml
 timeline:
@@ -465,7 +467,7 @@ Activities are categorized by keyword matching against the annotation summary:
 | Design | `🎨` | figma, design, photoshop, illustrator |
 | Work | `⚙️` | *(default when no keywords match)* |
 
-Categories are defined in `system_config.yaml` under the `categories` section.
+Categories are defined in `system_config.yaml` under the `categories` section (override in `user_config.yaml`).
 
 ### What is the focus score?
 
@@ -519,7 +521,7 @@ The dashboard has five tabs:
 | **Timeline** | Browse activities by date, expand rows to see screenshots, date navigation |
 | **Analytics** | Focus trend chart, token usage chart, category breakdown doughnut, hourly activity chart |
 | **Search** | Full-text search across activities with category filtering |
-| **Settings** | Edit capture, annotation, timeline, notification, and digest settings |
+| **Settings** | Edit settings, view live System Health, reset to defaults, and tune digest prompts |
 
 ### Does the dashboard support dark mode?
 
@@ -559,13 +561,15 @@ Yes. The dashboard uses Socket.IO for real-time updates. A green dot in the head
 
 ### How do I change settings from the dashboard?
 
-Go to the **Settings** tab. Changes are saved to `user_config.yaml` (a backup is created automatically before each save). Available settings:
+Go to the **Settings** tab. Changes are saved as overrides to `user_config.yaml` (a backup is created automatically before each save). Available settings:
 
 - **Capture**: interval, monitor index, retention days
 - **Annotation**: backend, mode (auto/manual), interval, batch size, analysis prompt, post-processing
 - **Timeline**: bucket minutes, exclude keywords
 - **Notifications**: enable/disable, pre-capture warning, warning seconds, sound
 - **Digest**: backend, generation interval
+- **System Health**: live runtime counters and uptime (capture, annotation, LLM, digest)
+- **Reset to Defaults**: restore default config with automatic backups
 
 ---
 
@@ -710,12 +714,14 @@ The capture loop also has internal protection — after 5 consecutive capture er
 
 ```
 ~/.chronometry/config/
-├── user_config.yaml      # Your preferences (intervals, prompts, modes)
-├── system_config.yaml    # System settings (ports, models, categories, paths)
+├── system_config.yaml    # ALL defaults (single source of truth)
+├── user_config.yaml      # Your overrides only (starts empty)
 └── backup/               # Automatic backups before config changes
 ```
 
-### What can I configure in user_config.yaml?
+### What settings can I override in user_config.yaml?
+
+All defaults live in `system_config.yaml`. Add any of these to `user_config.yaml` to override:
 
 | Section | Field | Default | Description |
 |---------|-------|---------|-------------|
@@ -737,7 +743,7 @@ The capture loop also has internal protection — after 5 consecutive capture er
 | | `pre_capture_warning_seconds` | `5` | Seconds before capture to warn |
 | | `pre_capture_sound` | `false` | Play sound with warning |
 
-### What can I configure in system_config.yaml?
+### What other defaults are in system_config.yaml?
 
 | Section | Field | Default | Description |
 |---------|-------|---------|-------------|
@@ -748,13 +754,13 @@ The capture loop also has internal protection — after 5 consecutive capture er
 | | `logs_dir` | `"~/.chronometry/logs"` | Log directory |
 | **annotation.local_model** | `provider` | `"ollama"` | `"ollama"` or `"openai_compatible"` |
 | | `base_url` | `"http://localhost:11434"` | LLM server URL |
-| | `model_name` | `"qwen2.5vl:7b"` | Vision model name |
-| | `timeout_sec` | `120` | API call timeout |
+| | `model_name` | `"qwen3-vl:8b"` | Primary model name |
+| | `timeout_sec` | `300` | API call timeout |
 | **digest** | `temperature` | `0.7` | LLM temperature |
 | | `max_tokens_category` | `200` | Max tokens per category summary |
 | | `max_tokens_overall` | `300` | Max tokens for overall summary |
 | **digest.local_model** | `provider` | `"ollama"` | Text model provider |
-| | `model_name` | `"qwen2.5:7b"` | Text model name |
+| | `model_name` | `"qwen3-vl:8b"` | Digest model name |
 | **timeline** | `gap_minutes` | `5` | Gap threshold for grouping activities |
 | **categories** | `focus` | *(list)* | Keywords for focus categories |
 | | `distraction` | *(list)* | Keywords for distraction categories |
@@ -777,11 +783,26 @@ chrono init
 chrono service install
 ```
 
-Or edit `root_dir` in `system_config.yaml` to change only the data storage path while keeping config and logs in `~/.chronometry/`.
+Or override `root_dir` in `~/.chronometry/config/user_config.yaml` to change only the data storage path while keeping config and logs in `~/.chronometry/`.
 
 ### Are configuration backups made?
 
-Yes. When you update settings through the web dashboard, a backup of the current `user_config.yaml` is created in `~/.chronometry/config/backup/` before the new settings are written.
+Yes. Backups are created automatically in `~/.chronometry/config/backup/` whenever you:
+- Save settings through the web dashboard
+- Click "Reset to Defaults" in the Settings tab
+- Run `chrono init --force` from the CLI
+
+### Where can I check system health?
+
+Open the dashboard and go to **Settings**. The **System Health** panel shows:
+
+- Capture attempts/success/fail/skips
+- Annotation runs and frame outcomes
+- LLM success/failure counters
+- Digest generation/cached hit/failure counters
+- Server start time and uptime
+
+The same data is available via API at `GET /api/system-health`.
 
 ---
 
@@ -806,6 +827,8 @@ Everything is under `~/.chronometry/` (or the path set by `CHRONOMETRY_HOME`):
 │   │       └── YYYYMMDD_HHMMSS.json             # AI annotation
 │   ├── digests/                     # Cached daily digests
 │   │   └── digest_YYYY-MM-DD.json
+│   ├── runtime_stats.json           # Shared runtime health counters
+│   ├── runtime_stats.lock           # File lock for cross-process updates
 │   └── token_usage/                 # LLM token tracking
 │       └── YYYY-MM-DD.json
 ├── output/                          # Generated timelines

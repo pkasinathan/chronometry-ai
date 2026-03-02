@@ -155,22 +155,14 @@ if __name__ == "__main__":
 
 ### Configuration Fixtures
 
-Located in `fixtures/config_test.yaml`:
-```yaml
-root_dir: "./test_data"
-capture:
-  capture_interval_seconds: 900
-  monitor_index: 1
-  retention_days: 30
-annotation:
-  batch_size: 4
-  timeout_sec: 30
-timeline:
-  bucket_minutes: 15
-digest:
-  enabled: true
-  interval_seconds: 3600
-```
+Defined in `conftest.py`:
+
+- **`sample_config`** — Returns a dict with full config including `model_name: "qwen3-vl:8b"`, annotation/digest backends, capture settings, timeline, notifications, and categories. Uses `tmp_path` for `root_dir`.
+- **`isolate_chronometry_home`** (autouse) — Redirects `CHRONOMETRY_HOME` to `tmp_path/.chronometry` so tests never touch the real `~/.chronometry` directory.
+
+The project uses a two-file config system:
+- `system_config.yaml` — Defaults shipped with the package (not user-edited)
+- `user_config.yaml` — User overrides merged on top of system defaults
 
 ### Sample Data Fixtures
 

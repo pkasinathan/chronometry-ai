@@ -4,6 +4,51 @@ All notable changes to Chronometry will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.19] - 2026-03-02
+
+### Added
+- Runtime health stats module with shared counters and `/api/system-health` endpoint coverage
+- Regression tests for config parity, timeline categorization boundaries, annotation partial-failure accounting, and digest/LLM runtime-stat branches
+- Release checklist document (`RELEASE.md`) for repeatable publish flow
+
+### Changed
+- Timeline categorization now uses hybrid keyword matching (boundary-safe with targeted stem matching for code terms)
+- Annotation batch processing now tracks successful frame preprocessing explicitly and records succeeded/failed counters consistently
+- Backup file naming now uses microsecond precision with collision-safe suffixing
+- Python support metadata aligned to `3.10-3.13` in package metadata and docs
+
+### Fixed
+- Default config divergence between `config/system_config.yaml` and packaged defaults for annotation rewrite prompt
+- Weak/tautological tests in runtime stats and config update paths replaced with deterministic assertions
+- System health endpoint test coverage added for both success and failure responses
+
+## [1.0.18] - 2026-03-02
+
+### Added
+- **Config consolidation**: All defaults in `system_config.yaml`, user overrides in `user_config.yaml`
+- **Backup and reset system**: `backup_config()` creates timestamped backups before config changes
+- **Reset to Defaults button**: UI button with confirm dialog, backs up then resets both config files
+- **System Health API + UI**: Live runtime counters via `/api/system-health` and a new Settings health panel
+- **Digest prompt templates**: `digest_category_prompt` and `digest_overall_prompt` configurable in Settings UI
+- **OS metadata in annotation prompt**: `{metadata_block}` and `{recent_context}` placeholders
+- **Secret key warning**: Startup log warning if Flask SECRET_KEY is still the insecure default
+- **API input validation**: PUT `/api/config` validates request body type and section types
+- **Thread-safe annotation**: `_annotation_running` guarded by `threading.Lock()` to prevent duplicate runs
+- **Runtime stats persistence**: New `runtime_stats.json` store shared across processes
+- **pyobjc-framework-Quartz**: Added as macOS-only dependency for hotkey handling
+
+### Changed
+- Default primary model changed to `qwen3-vl:8b` (unified for annotation and digest)
+- Default fallback model changed to `qwen2.5vl:7b`
+- `model_override` now correctly passed to OpenAI-compatible vision backend
+- Token tracking isolated in nested try/except to prevent discarding valid formatted summaries
+- Timeline frame cards now show a privacy placeholder when screenshots are skipped intentionally
+
+### Fixed
+- `load_config()` now handles empty/corrupted `system_config.yaml` with `or {}` guard
+- Fallback model hardcoded default aligned with YAML (`qwen2.5vl:7b` instead of `moondream`)
+- Added missing `annotation.backend` and `digest.backend` defaults to `system_config.yaml`
+
 ## [1.0.7] - 2026-03-01
 
 ### Added

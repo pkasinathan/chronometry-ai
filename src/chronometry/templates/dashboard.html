@@ -380,6 +380,22 @@
             margin-bottom: 0.75rem;
         }
 
+        .privacy-placeholder {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem 1.25rem;
+            background: var(--bg-subtle);
+            border: 1px dashed var(--border-color);
+            border-radius: 6px;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        .privacy-icon {
+            font-size: 1.1rem;
+        }
+
         .metadata-badges {
             display: flex;
             flex-wrap: wrap;
@@ -671,6 +687,70 @@
         [data-theme="light"] .md-content code { background: rgba(0,0,0,0.06); }
         [data-theme="light"] .md-content blockquote { border-left-color: rgba(0,0,0,0.15); }
 
+        /* ── System Health ── */
+        .health-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        .health-card {
+            padding: 0.75rem;
+            border-radius: 8px;
+            background: var(--surface-card);
+            border: 1px solid var(--border-color);
+        }
+        .health-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+        .health-card-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-muted);
+        }
+        .health-card-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        .health-card-detail {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+        .health-card-detail span { margin-right: 0.6rem; }
+        .health-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 0.35rem;
+            vertical-align: middle;
+        }
+        .health-dot.green { background: #22c55e; }
+        .health-dot.yellow { background: #eab308; }
+        .health-dot.red { background: #ef4444; }
+        .health-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 0.75rem;
+        }
+        .health-meta .uptime { font-variant-numeric: tabular-nums; }
+        .health-badge-fail { color: #ef4444; font-weight: 600; }
+        .health-badge-warn { color: #d97706; font-weight: 600; }
+
+        @media (max-width: 768px) {
+            .health-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+
         /* ── Scrollbar ── */
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -944,7 +1024,12 @@
                                                 <span v-if="frame.metadata.url" class="badge badge-url">[[ frame.metadata.url ]]</span>
                                                 <span v-if="frame.metadata.workspace" class="badge badge-workspace">[[ frame.metadata.workspace ]]</span>
                                             </div>
-                                            <img :src="getFrameImageUrl(frame)"
+                                            <div v-if="!frame.image_file" class="privacy-placeholder">
+                                                <span class="privacy-icon">🔒</span>
+                                                <span>Screenshot skipped for privacy</span>
+                                            </div>
+                                            <img v-else
+                                                 :src="getFrameImageUrl(frame)"
                                                  :alt="frame.timestamp"
                                                  class="activity-frame-image"
                                                  @click="viewFrameFullSize(frame)">
@@ -1047,10 +1132,87 @@
             
             <!-- ═══ Settings Tab ═══ -->
             <div v-show="activeTab === 'settings'">
+
+                <!-- System Health -->
+                <article class="section-card" v-if="systemHealth">
+                    <header>
+                        <h3>
+                            <span class="health-dot" :class="healthStatus"></span>
+                            System Health
+                        </h3>
+                        <button class="btn-sm outline" @click="loadSystemHealth">Refresh</button>
+                    </header>
+
+                    <div class="health-meta">
+                        <span>Started [[ formatDateTime(systemHealth.server_start_time) ]]</span>
+                        <span class="uptime">Uptime [[ formatUptime(systemHealth.uptime_seconds) ]]</span>
+                    </div>
+
+                    <div class="health-grid">
+                        <!-- Capture -->
+                        <div class="health-card">
+                            <div class="health-card-header">
+                                <span class="health-card-title">Capture</span>
+                                <span class="health-card-value">[[ systemHealth.capture.succeeded ]] / [[ systemHealth.capture.attempted ]]</span>
+                            </div>
+                            <div class="health-card-detail">
+                                <span v-if="systemHealth.capture.failed > 0" class="health-badge-fail">[[ systemHealth.capture.failed ]] failed</span>
+                                <span v-if="systemHealth.capture.skipped_locked > 0">[[ systemHealth.capture.skipped_locked ]] locked</span>
+                                <span v-if="systemHealth.capture.skipped_camera > 0">[[ systemHealth.capture.skipped_camera ]] camera</span>
+                                <span v-if="systemHealth.capture.attempted === 0" style="opacity:0.5">No captures yet</span>
+                            </div>
+                        </div>
+
+                        <!-- Annotation -->
+                        <div class="health-card">
+                            <div class="health-card-header">
+                                <span class="health-card-title">Annotation</span>
+                                <span class="health-card-value">[[ systemHealth.annotation.frames_succeeded ]] / [[ systemHealth.annotation.frames_attempted ]]</span>
+                            </div>
+                            <div class="health-card-detail">
+                                <span v-if="systemHealth.annotation.runs > 0">[[ systemHealth.annotation.runs ]] runs</span>
+                                <span v-if="systemHealth.annotation.frames_failed > 0" class="health-badge-fail">[[ systemHealth.annotation.frames_failed ]] failed</span>
+                                <span v-if="systemHealth.annotation.frames_attempted === 0" style="opacity:0.5">No annotations yet</span>
+                            </div>
+                        </div>
+
+                        <!-- LLM -->
+                        <div class="health-card">
+                            <div class="health-card-header">
+                                <span class="health-card-title">LLM</span>
+                                <span class="health-card-value">[[ systemHealth.llm.vision_succeeded + systemHealth.llm.text_succeeded ]] / [[ systemHealth.llm.vision_calls + systemHealth.llm.text_calls ]]</span>
+                            </div>
+                            <div class="health-card-detail">
+                                <span v-if="systemHealth.llm.vision_calls > 0">V [[ systemHealth.llm.vision_succeeded ]]/[[ systemHealth.llm.vision_calls ]]</span>
+                                <span v-if="systemHealth.llm.text_calls > 0">T [[ systemHealth.llm.text_succeeded ]]/[[ systemHealth.llm.text_calls ]]</span>
+                                <span v-if="systemHealth.llm.vision_failed + systemHealth.llm.text_failed > 0" class="health-badge-fail">[[ systemHealth.llm.vision_failed + systemHealth.llm.text_failed ]] failed</span>
+                                <span v-if="systemHealth.llm.text_empty_content > 0" class="health-badge-warn">[[ systemHealth.llm.text_empty_content ]] empty</span>
+                                <span v-if="systemHealth.llm.vision_calls + systemHealth.llm.text_calls === 0" style="opacity:0.5">No LLM calls yet</span>
+                            </div>
+                        </div>
+
+                        <!-- Digest -->
+                        <div class="health-card">
+                            <div class="health-card-header">
+                                <span class="health-card-title">Digest</span>
+                                <span class="health-card-value">[[ systemHealth.digest.generated ]]</span>
+                            </div>
+                            <div class="health-card-detail">
+                                <span v-if="systemHealth.digest.cached_hits > 0">[[ systemHealth.digest.cached_hits ]] cached</span>
+                                <span v-if="systemHealth.digest.failed > 0" class="health-badge-fail">[[ systemHealth.digest.failed ]] failed</span>
+                                <span v-if="systemHealth.digest.generated === 0 && systemHealth.digest.cached_hits === 0" style="opacity:0.5">No digests yet</span>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+
                 <article class="section-card">
                     <header>
                         <h3>Configuration</h3>
-                        <button class="btn-sm" @click="saveSettings">Save Changes</button>
+                        <div style="display:flex;gap:0.5rem">
+                            <button class="btn-sm outline" style="color:var(--text-muted);border-color:var(--border-color)" @click="resetSettings">Reset to Defaults</button>
+                            <button class="btn-sm" @click="saveSettings">Save Changes</button>
+                        </div>
                     </header>
 
                     <!-- Capture -->
@@ -1174,6 +1336,16 @@
                             <input type="number" v-model.number="settings.digest.interval_seconds">
                             <div class="settings-hint">Every [[ Math.round(settings.digest.interval_seconds / 60) ]] min</div>
                                     </div>
+                                <div class="settings-field">
+                                    <label>Category Summary Prompt</label>
+                                    <textarea v-model="settings.digest.digest_category_prompt" rows="6" style="font-family:monospace;font-size:0.82rem"></textarea>
+                                    <div class="settings-hint">Placeholders: {category}, {activity_descriptions}</div>
+                                </div>
+                                <div class="settings-field">
+                                    <label>Overall Summary Prompt</label>
+                                    <textarea v-model="settings.digest.digest_overall_prompt" rows="8" style="font-family:monospace;font-size:0.82rem"></textarea>
+                                    <div class="settings-hint">Placeholders: {total_activities}, {focus_percentage}, {top_categories}, {sample_activities}</div>
+                                </div>
                                 </div>
                 </article>
 
@@ -1235,10 +1407,12 @@
                         capture: { capture_interval_seconds: 900, monitor_index: 1, retention_days: 1095 },
                         annotation: { screenshot_analysis_batch_size: 2, rewrite_screenshot_analysis_format_summary: false, rewrite_screenshot_analysis_prompt: '', screenshot_analysis_prompt: '' },
                         timeline: { bucket_minutes: 30, exclude_keywords_text: '' },
-                        digest: { interval_seconds: 3600 },
+                        digest: { interval_seconds: 3600, digest_category_prompt: '', digest_overall_prompt: '' },
                         notifications: { enabled: true, notify_before_capture: true, pre_capture_warning_seconds: 5, pre_capture_sound: false }
                     },
                     availableDates: [],
+                    systemHealth: null,
+                    _healthPoll: null,
                     socket: null,
                     focusChart: null, categoryChart: null, hourlyChart: null, tokenChart: null,
                     searchTimeout: null,
@@ -1283,9 +1457,13 @@
                     await this.loadAvailableDates();
                     await this.loadDigest();
                     await this.loadSettings();
+                    await this.loadSystemHealth();
                     this.initWebSocket();
                     if (this.activeTab === 'timeline') this.loadTimelineByDate();
                     else if (this.activeTab === 'analytics') this.$nextTick(() => this.loadAnalytics());
+                    if (this.activeTab === 'settings') {
+                        this._healthPoll = setInterval(() => this.loadSystemHealth(), 30000);
+                    }
                 },
                 initWebSocket() {
                     this.socket = io();
@@ -1451,8 +1629,33 @@
                         alert(r.ok ? 'Settings saved. Restart services to apply.' : 'Failed: ' + (await r.json()).message);
                     } catch(e) { alert('Error: ' + e.message); }
                 },
+                async resetSettings() {
+                    if (!confirm('This will reset ALL settings to defaults.\nYour current config will be backed up first.\n\nContinue?')) return;
+                    try {
+                        const r = await fetch('/api/config/reset', { method: 'POST' });
+                        const data = await r.json();
+                        if (r.ok) {
+                            await this.loadSettings();
+                            this.showToast('Settings reset to defaults. Backups saved.');
+                        } else {
+                            alert('Reset failed: ' + (data.message || 'Unknown error'));
+                        }
+                    } catch(e) { alert('Error: ' + e.message); }
+                },
                 async loadAvailableDates() {
                     try { this.availableDates = (await (await fetch('/api/dates')).json()).dates || []; } catch(e) {}
+                },
+                async loadSystemHealth() {
+                    try { this.systemHealth = await (await fetch('/api/system-health')).json(); }
+                    catch(e) { console.error('Failed to load system health', e); }
+                },
+                formatUptime(s) {
+                    if (!s && s !== 0) return '';
+                    const d = Math.floor(s/86400), h = Math.floor((s%86400)/3600), m = Math.floor((s%3600)/60);
+                    if (d > 0) return `${d}d ${h}h ${m}m`;
+                    if (h > 0) return `${h}h ${m}m`;
+                    if (m > 0) return `${m}m`;
+                    return `${Math.floor(s)}s`;
                 },
                 async exportData() { window.open(`/api/export/csv?date=${this.selectedDate}`, '_blank'); },
                 previousDay() { const d=new Date(this.selectedDate); d.setDate(d.getDate()-1); this.selectedDate=d.toISOString().split('T')[0]; this.loadTimelineByDate(); },
@@ -1489,12 +1692,34 @@
                 formattedSelectedDate() {
                     if (!this.selectedDate) return '';
                     return new Date(this.selectedDate + 'T12:00:00').toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+                },
+                healthStatus() {
+                    if (!this.systemHealth) return 'gray';
+                    const h = this.systemHealth;
+                    const failures = h.capture.failed + h.annotation.frames_failed
+                        + h.llm.vision_failed + h.llm.text_failed + h.digest.failed;
+                    if (failures > 0) return 'red';
+                    if (h.llm.text_empty_content > 0) return 'yellow';
+                    return 'green';
+                }
+            },
+            beforeUnmount() {
+                if (this._healthPoll) {
+                    clearInterval(this._healthPoll);
+                    this._healthPoll = null;
                 }
             },
             watch: {
                 activeTab(t) {
                     if (t === 'analytics') this.$nextTick(() => this.loadAnalytics());
                     else if (t === 'timeline') this.loadTimelineByDate();
+                    if (t === 'settings') {
+                        this.loadSystemHealth();
+                        this._healthPoll = setInterval(() => this.loadSystemHealth(), 30000);
+                    } else if (this._healthPoll) {
+                        clearInterval(this._healthPoll);
+                        this._healthPoll = null;
+                    }
                 }
             }
         }).mount('#app');

@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,25 @@ from chronometry.common import ensure_dir, format_date, get_daily_dir, load_conf
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+_PREFIX_MATCH_KEYWORDS = {"git", "debug", "commit"}
+
+
+def _keyword_matches(summary_lower: str, keyword: str) -> bool:
+    """Match keyword with controlled prefix support for known stems."""
+    escaped = re.escape(keyword)
+
+    # Keep phrase behavior predictable for multi-word patterns.
+    if " " in keyword:
+        return keyword in summary_lower
+
+    if re.search(r"\b" + escaped + r"\b", summary_lower):
+        return True
+
+    if keyword in _PREFIX_MATCH_KEYWORDS:
+        return bool(re.search(r"\b" + escaped + r"\w*\b", summary_lower))
+
+    return False
 
 
 def _strip_code_fences(text: str) -> str:
@@ -232,7 +252,7 @@ def categorize_activity(summary) -> tuple[str, str, str]:
     }
 
     for category, config in categories.items():
-        if any(keyword in summary_lower for keyword in config["keywords"]):
+        if any(_keyword_matches(summary_lower, keyword) for keyword in config["keywords"]):
             return (category.title(), config["icon"], config["color"])
 
     # Default category

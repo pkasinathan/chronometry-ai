@@ -63,11 +63,18 @@ def generate_category_summaries(activities: list[dict], config: dict) -> tuple[d
         if len(activities_list) > 10:
             activity_descriptions.append(f"... and {len(activities_list) - 10} more activities")
 
-        prompt = f"""Summarize the following {category} activities from today's work in 2-3 sentences. Focus on key accomplishments and patterns:
-
-{chr(10).join(activity_descriptions)}
-
-Provide a concise, professional summary."""
+        default_category_prompt = (
+            "Summarize the following {category} activities from today's work "
+            "in 2-3 sentences. Focus on key accomplishments and patterns:\n\n"
+            "{activity_descriptions}\n\n"
+            "Provide a concise, professional summary."
+        )
+        template = config.get("digest", {}).get("digest_category_prompt", default_category_prompt)
+        descriptions_text = "\n".join(activity_descriptions)
+        for ph in ("{category}", "{activity_descriptions}"):
+            if ph not in template:
+                logger.warning(f"digest_category_prompt is missing placeholder {ph}")
+        prompt = template.replace("{category}", category).replace("{activity_descriptions}", descriptions_text)
 
         # Get max tokens from config
         max_tokens_category = config.get("digest", {}).get("max_tokens_category", 200)
@@ -105,17 +112,27 @@ def generate_overall_summary(activities: list[dict], stats: dict, config: dict) 
     for activity in activities[:5]:  # Take first 5 activities as examples
         key_activities.append(f"• {activity['category']}: {activity['summary'][:100]}")
 
-    prompt = f"""Generate a brief, professional summary (3-4 sentences) of today's work activities:
-
-**Statistics:**
-- Total activities: {total_activities}
-- Focus percentage: {focus_percentage}%
-- Top categories: {top_categories_str}
-
-**Sample activities:**
-{chr(10).join(key_activities)}
-
-Create an engaging summary that highlights productivity and key focus areas."""
+    default_overall_prompt = (
+        "Generate a brief, professional summary (3-4 sentences) of today's work activities:\n\n"
+        "**Statistics:**\n"
+        "- Total activities: {total_activities}\n"
+        "- Focus percentage: {focus_percentage}%\n"
+        "- Top categories: {top_categories}\n\n"
+        "**Sample activities:**\n"
+        "{sample_activities}\n\n"
+        "Create an engaging summary that highlights productivity and key focus areas."
+    )
+    template = config.get("digest", {}).get("digest_overall_prompt", default_overall_prompt)
+    for ph in ("{total_activities}", "{focus_percentage}", "{top_categories}", "{sample_activities}"):
+        if ph not in template:
+            logger.warning(f"digest_overall_prompt is missing placeholder {ph}")
+    activities_text = "\n".join(key_activities)
+    prompt = (
+        template.replace("{total_activities}", str(total_activities))
+        .replace("{focus_percentage}", str(focus_percentage))
+        .replace("{top_categories}", top_categories_str)
+        .replace("{sample_activities}", activities_text)
+    )
 
     # Get max tokens from config
     max_tokens_overall = config.get("digest", {}).get("max_tokens_overall", 300)
@@ -125,6 +142,8 @@ Create an engaging summary that highlights productivity and key focus areas."""
 
 def generate_daily_digest(date: datetime, config: dict) -> dict:
     """Generate a complete daily digest."""
+    from chronometry.runtime_stats import stats as rt_stats
+
     root_dir = config["root_dir"]
     daily_dir = get_daily_dir(root_dir, date)
 
@@ -155,39 +174,52 @@ def generate_daily_digest(date: datetime, config: dict) -> dict:
 
     # Group into activities using config
     activities = group_activities(annotations, config=config)
-    stats = calculate_stats(activities)
+    day_stats = calculate_stats(activities)
 
     logger.info(f"Generating digest for {len(activities)} activities...")
 
-    # Generate category summaries
-    category_summaries, category_tokens = generate_category_summaries(activities, config)
+    try:
+        # Generate category summaries
+        category_summaries, category_tokens = generate_category_summaries(activities, config)
 
-    # Generate overall summary
-    overall_summary, overall_tokens = generate_overall_summary(activities, stats, config)
+        # Generate overall summary
+        overall_summary, overall_tokens = generate_overall_summary(activities, day_stats, config)
 
-    # Calculate total token usage
-    total_tokens = category_tokens + overall_tokens
-    logger.info(f"Digest generated using {total_tokens} tokens")
+        # Calculate total token usage
+        total_tokens = category_tokens + overall_tokens
+        logger.info(f"Digest generated using {total_tokens} tokens")
 
-    # Create digest (no token_usage field - that's tracked separately now)
-    digest = {
-        "date": format_date(date),
-        "overall_summary": overall_summary,
-        "category_summaries": category_summaries,
-        "stats": stats,
-        "total_activities": len(activities),
-    }
+        # Create digest (no token_usage field - that's tracked separately now)
+        digest = {
+            "date": format_date(date),
+            "overall_summary": overall_summary,
+            "category_summaries": category_summaries,
+            "stats": day_stats,
+            "total_activities": len(activities),
+        }
 
-    # Cache the digest
-    cache_dir = Path(root_dir) / "digests"
-    cache_dir.mkdir(exist_ok=True)
+        # Cache the digest
+        cache_dir = Path(root_dir) / "digests"
+        cache_dir.mkdir(exist_ok=True)
 
-    cache_file = cache_dir / f"digest_{format_date(date)}.json"
-    # Use helper to save JSON
-    save_json(cache_file, digest)
-    logger.info(f"Digest cached to {cache_file}")
+        cache_file = cache_dir / f"digest_{format_date(date)}.json"
+        save_json(cache_file, digest)
+        logger.info(f"Digest cached to {cache_file}")
 
-    return digest
+        rt_stats.record("digest.generated")
+        return digest
+
+    except Exception as e:
+        logger.error(f"Digest generation failed: {e}", exc_info=True)
+        rt_stats.record("digest.failed")
+        return {
+            "date": format_date(date),
+            "error": f"Generation failed: {e}",
+            "overall_summary": "Digest generation encountered an error.",
+            "category_summaries": {},
+            "stats": day_stats,
+            "total_activities": len(activities),
+        }
 
 
 def load_cached_digest(date: datetime, config: dict) -> dict:
@@ -208,10 +240,13 @@ def load_cached_digest(date: datetime, config: dict) -> dict:
 
 def get_or_generate_digest(date: datetime, config: dict, force_regenerate: bool = False) -> dict:
     """Get digest from cache or generate a new one."""
+    from chronometry.runtime_stats import stats as rt_stats
+
     if not force_regenerate:
         cached = load_cached_digest(date, config)
         if cached:
             logger.info(f"Using cached digest for {format_date(date)}")
+            rt_stats.record("digest.cached_hits")
             return cached
 
     return generate_daily_digest(date, config)

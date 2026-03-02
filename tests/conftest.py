@@ -7,8 +7,6 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-import yaml
-
 
 @pytest.fixture()
 def project_root() -> Path:
@@ -47,7 +45,10 @@ def sample_config(tmp_path: Path) -> dict[str, Any]:
             "local_model": {
                 "provider": "ollama",
                 "base_url": "http://localhost:11434",
-                "model_name": "qwen2.5vl:7b",
+                "model_name": "qwen3-vl:8b",
+                "fallback_model_name": "qwen2.5vl:7b",
+                "timeout_sec": 300,
+                "max_retries": 3,
             },
         },
         "timeline": {
@@ -71,14 +72,6 @@ def sample_config(tmp_path: Path) -> dict[str, Any]:
             "distraction_keywords": ["social", "youtube"],
         },
     }
-
-
-@pytest.fixture()
-def sample_config_file(tmp_path: Path, sample_config: dict[str, Any]) -> Path:
-    """Write sample config to a YAML file and return its path."""
-    cfg_path = tmp_path / "config.yaml"
-    cfg_path.write_text(yaml.dump(sample_config))
-    return cfg_path
 
 
 @pytest.fixture()

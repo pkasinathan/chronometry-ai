@@ -1,41 +1,17 @@
-capture:
-  capture_interval_seconds: 900
-  monitor_index: 1
-  retention_days: 1095
-
-annotation:
-  annotation_mode: manual
-  annotation_interval_hours: 4
-  screenshot_analysis_batch_size: 1
-  inference_image_max_edge: 1280
-  inference_image_quality: 80
-  screenshot_analysis_prompt: |
-    You are a productivity logger.
-
-    {metadata_block}
-
-    {recent_context}
-
-    Extract from this screenshot and respond as a single JSON object with exactly these keys:
-    - "application": active application name
-    - "activity": what I am working on
-    - "task_type": type of task (coding, analysis, browsing, meeting, etc.)
-    - "artifact": specific file, repo, table, or URL
-    - "next_step": intended next step (inferred)
-
-    Respond in compact JSON only. No explanation.
-  rewrite_screenshot_analysis_format_summary: false
-  rewrite_screenshot_analysis_prompt: ''
-
-digest:
-  interval_seconds: 3600
-
-timeline:
-  bucket_minutes: 30
-  exclude_keywords: []
-
-notifications:
-  enabled: true
-  notify_before_capture: true
-  pre_capture_warning_seconds: 5
-  pre_capture_sound: false
+# Chronometry User Overrides
+# ===========================
+# Add your customizations here. Any key you set will override the
+# corresponding default in system_config.yaml.
+#
+# Examples:
+#   capture:
+#     capture_interval_seconds: 600   # capture every 10 min instead of 15
+#
+#   annotation:
+#     screenshot_analysis_prompt: |
+#       Your custom prompt here...
+#
+#   notifications:
+#     pre_capture_sound: true
+#
+# Run 'chrono config' to see the full merged configuration.

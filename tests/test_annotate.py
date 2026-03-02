@@ -61,7 +61,7 @@ class TestCallVisionAPI:
                 "local_model": {
                     "provider": "ollama",
                     "base_url": "http://localhost:11434",
-                    "model_name": "qwen2.5vl:7b",
+                    "model_name": "qwen3-vl:8b",
                     "timeout_sec": 120,
                 },
             }
@@ -230,6 +230,32 @@ class TestBatchProcessing:
                 "screenshot_analysis_batch_size": 4,
             }
         }
+
+    @patch("chronometry.annotate.save_json")
+    @patch("chronometry.annotate.call_vision_api_with_retry")
+    @patch("chronometry.annotate.encode_image_to_base64")
+    @patch("chronometry.runtime_stats.stats.record")
+    def test_process_batch_partial_preprocess_failure_tracks_consistent_stats(
+        self, mock_stats_record, mock_encode, mock_api, mock_save, test_config, tmp_path
+    ):
+        """Preprocess failures should not be saved and should count as failed."""
+        image_paths = []
+        for i in range(2):
+            img_path = tmp_path / f"test_{i}.png"
+            img_path.write_bytes(b"fake image")
+            inference_path = tmp_path / f"test_{i}_inference.jpg"
+            inference_path.write_bytes(b"fake jpeg")
+            image_paths.append(img_path)
+
+        mock_encode.side_effect = ["base64data", Exception("Encoding failed")]
+        mock_api.return_value = {"summary": "Batch summary", "sources": ["source1"]}
+
+        process_batch(image_paths, test_config)
+
+        assert mock_save.call_count == 1
+        mock_stats_record.assert_any_call("annotation.frames_attempted", 2)
+        mock_stats_record.assert_any_call("annotation.frames_failed", 1)
+        mock_stats_record.assert_any_call("annotation.frames_succeeded", 1)
 
     @patch("chronometry.annotate.save_json")
     @patch("chronometry.annotate.call_vision_api_with_retry")
@@ -522,6 +548,78 @@ class TestFrameAnnotation:
             batch = mock_process.call_args[0][0]
             filenames = [f.name for f in batch]
             assert filenames == sorted(filenames)
+
+
+class TestBuildPrompt:
+    """Tests for build_prompt() with metadata and context injection."""
+
+    def test_build_prompt_with_metadata_and_context(self, sample_config):
+        """Test prompt with both metadata and recent context."""
+        from chronometry.annotate import build_prompt
+
+        sample_config["annotation"]["screenshot_analysis_prompt"] = (
+            "Annotate this.\n\n{metadata_block}\n\n{recent_context}\n\nReturn JSON."
+        )
+        metadata = {
+            "active_app": "VS Code",
+            "window_title": "main.py",
+            "url": None,
+            "workspace": "/home/user/project",
+        }
+        recent = "Previously: Writing Python tests"
+
+        result = build_prompt(sample_config, metadata=metadata, recent_context=recent)
+
+        assert "Active app: VS Code" in result
+        assert "Window title: main.py" in result
+        assert "Workspace: /home/user/project" in result
+        assert "URL:" not in result
+        assert "Previously: Writing Python tests" in result
+        assert "{metadata_block}" not in result
+        assert "{recent_context}" not in result
+
+    def test_build_prompt_metadata_only(self, sample_config):
+        """Test prompt with metadata but no recent context."""
+        from chronometry.annotate import build_prompt
+
+        sample_config["annotation"]["screenshot_analysis_prompt"] = (
+            "Annotate.\n\n{metadata_block}\n\n{recent_context}"
+        )
+        metadata = {"active_app": "Chrome", "window_title": "Google"}
+
+        result = build_prompt(sample_config, metadata=metadata, recent_context="")
+
+        assert "Active app: Chrome" in result
+        assert "{metadata_block}" not in result
+        assert "{recent_context}" not in result
+
+    def test_build_prompt_context_only(self, sample_config):
+        """Test prompt with recent context but no metadata."""
+        from chronometry.annotate import build_prompt
+
+        sample_config["annotation"]["screenshot_analysis_prompt"] = (
+            "Annotate.\n\n{metadata_block}\n\n{recent_context}"
+        )
+
+        result = build_prompt(sample_config, metadata=None, recent_context="Did some coding")
+
+        assert "Did some coding" in result
+        assert "OS Context" not in result
+        assert "{metadata_block}" not in result
+
+    def test_build_prompt_neither(self, sample_config):
+        """Test prompt with neither metadata nor context (screenshot-only)."""
+        from chronometry.annotate import build_prompt
+
+        sample_config["annotation"]["screenshot_analysis_prompt"] = (
+            "Annotate.\n\n{metadata_block}\n\n{recent_context}"
+        )
+
+        result = build_prompt(sample_config, metadata=None, recent_context="")
+
+        assert "{metadata_block}" not in result
+        assert "{recent_context}" not in result
+        assert "Annotate." in result
 
 
 if __name__ == "__main__":

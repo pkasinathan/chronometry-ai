@@ -14,7 +14,7 @@ description: >
 
 # Chronometry CLI Skill
 
-Chronometry (`pip install chronometry-ai`) is a **privacy-first macOS activity tracker** that periodically screenshots the desktop, annotates frames with a local vision model (Ollama), and generates daily digests and timeline visualizations — all running locally.
+Chronometry (`pip3 install chronometry-ai`) is a **privacy-first macOS activity tracker** that periodically screenshots the desktop, annotates frames with a local vision model (Ollama), and generates daily digests and timeline visualizations — all running locally.
 
 ## Project layout
 
@@ -39,8 +39,8 @@ src/chronometry/
 ```
 ~/.chronometry/
 ├── config/
-│   ├── user_config.yaml       # User preferences (intervals, prompts, backends)
-│   ├── system_config.yaml     # System settings (ports, models, log levels)
+│   ├── system_config.yaml     # ALL defaults (single source of truth)
+│   ├── user_config.yaml       # User overrides only (starts empty)
 │   └── backup/                # Auto-backups before config changes
 ├── data/
 │   ├── frames/                # Screenshots organised by date (YYYY-MM-DD/)
@@ -70,7 +70,7 @@ Override the home directory with `CHRONOMETRY_HOME` env var.
 | `chrono init` | Creates `~/.chronometry/` with default configs, data dirs, log folders |
 | `chrono init --force` | Overwrites existing configs with package defaults |
 | `chrono validate` | Runs system checks: Ollama reachability, config validity, directory structure |
-| `chrono config` | Prints `user_config.yaml` in a Rich panel |
+| `chrono config` | Prints merged configuration in a Rich panel |
 | `chrono config --validate` | Loads config and confirms root dir + active backends |
 | `chrono version` | Shows version, `CHRONOMETRY_HOME`, config dir, Python version |
 
@@ -135,31 +135,13 @@ Ollama status is also shown in `status`/`service list` if local backends are con
 
 ## Configuration
 
-### `user_config.yaml` (user preferences)
+### `system_config.yaml` (all defaults)
 
-```yaml
-capture:
-  capture_interval_seconds: 900   # 15 minutes between screenshots
-  monitor_index: 1                # 0 = all monitors
-  retention_days: 1095            # ~3 years of data retention
+Contains every setting: capture intervals, annotation prompts, model names, server port, digest prompts, notification preferences, categories, etc. This is the single source of truth.
 
-annotation:
-  annotation_mode: manual         # "manual" or "auto"
-  screenshot_analysis_batch_size: 1
-  inference_image_max_edge: 1280  # Longest edge for downscaled VLM input
-  inference_image_quality: 80     # JPEG quality
-  screenshot_analysis_prompt: |
-    You are a productivity logger...
+### `user_config.yaml` (overrides only)
 
-notifications:
-  enabled: true
-  notify_before_capture: true
-  pre_capture_warning_seconds: 5
-```
-
-### `system_config.yaml` (system settings)
-
-Model names, server port, log levels, activity category definitions. Edit directly or via the web dashboard.
+Starts empty. Add only the settings you want to change — they override the matching keys in `system_config.yaml`. Edited via the web dashboard Settings tab or directly.
 
 ### LLM backends
 
@@ -170,7 +152,8 @@ Model names, server port, log levels, activity category definitions. Edit direct
 
 Configure under `annotation.local_model` and `digest.local_model` in `system_config.yaml`.
 
-Default vision model: `qwen2.5vl:7b` (pull with `ollama pull qwen2.5vl:7b`).
+Default primary model: `qwen3-vl:8b` (pull with `ollama pull qwen3-vl:8b`).
+Fallback vision model: `qwen2.5vl:7b`.
 
 ---
 
@@ -182,7 +165,8 @@ Default vision model: `qwen2.5vl:7b` (pull with `ollama pull qwen2.5vl:7b`).
 # 1. Install Ollama and pull the vision model
 brew install ollama
 brew services start ollama
-ollama pull qwen2.5vl:7b
+ollama pull qwen3-vl:8b
+ollama pull qwen2.5vl:7b    # fallback model
 
 # 2. Install chronometry
 pip3 install chronometry-ai
@@ -248,7 +232,7 @@ chrono open               # Open full web dashboard
 
 **Annotation fails / times out**
 - Is Ollama running? `curl http://localhost:11434` should return 200
-- Is the model pulled? `ollama list` — pull if missing: `ollama pull qwen2.5vl:7b`
+- Is the model pulled? `ollama list` — pull if missing: `ollama pull qwen3-vl:8b`
 - Check annotation backend in `chrono config`
 
 **Dashboard not opening (`http://localhost:8051`)**

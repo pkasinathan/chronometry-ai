@@ -150,6 +150,21 @@ class TestCategorizeActivity:
         assert icon == "⚙️"
         assert color == "#E50914"
 
+    def test_categorize_code_stem_keywords(self):
+        """Stem-style terms should still categorize as code."""
+        category, _, _ = categorize_activity("Reviewing github commits and debugging test failures")
+        assert category == "Code"
+
+    def test_categorize_word_boundary_guard(self):
+        """Boundary matching should avoid accidental partial matches."""
+        category, _, _ = categorize_activity("Investigating codecov upload failures in ci")
+        assert category == "Work"
+
+    def test_categorize_meeting_boundary_guard(self):
+        """Meeting keyword should not match unrelated words."""
+        category, _, _ = categorize_activity("Drafting meetingly migration plan")
+        assert category == "Work"
+
 
 class TestGroupActivities:
     """Tests for activity grouping."""

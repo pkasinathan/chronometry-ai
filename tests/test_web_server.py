@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, Mock, mock_open, patch
 
 import pytest
+import yaml
 
 from chronometry.web_server import app, init_config
 
@@ -504,8 +505,9 @@ class TestConfigurationUpdate:
         with app.test_client() as client:
             yield client
 
+    @patch("chronometry.web_server.backup_config")
     @patch("chronometry.web_server.init_config")
-    def test_update_config_user_config(self, mock_init, client, tmp_path):
+    def test_update_config_user_config(self, mock_init, mock_backup, client, tmp_path):
         """Test updating user configuration."""
         config_dir = tmp_path / "config"
         config_dir.mkdir()
@@ -519,7 +521,11 @@ class TestConfigurationUpdate:
                 content_type="application/json",
             )
 
-            assert response.status_code in [200, 500]
+            assert response.status_code == 200
+            updated = yaml.safe_load(config_file.read_text())
+            assert updated["capture"]["capture_interval_seconds"] == 600
+            mock_backup.assert_called_once_with(config_file)
+            mock_init.assert_called_once()
 
 
 class TestWebSocketEvents:
@@ -573,6 +579,128 @@ class TestWebSocketEvents:
             broadcast_new_activity(activity_data)
 
             mock_emit.assert_called_once_with("new_activity", activity_data)
+
+
+class TestConfigReset:
+    """Tests for POST /api/config/reset endpoint."""
+
+    @patch("chronometry.web_server.init_config")
+    @patch("chronometry.web_server.bootstrap")
+    def test_reset_config_calls_bootstrap_force(self, mock_bootstrap, mock_init):
+        """Test that reset endpoint calls bootstrap(force=True)."""
+        with app.test_client() as client:
+            response = client.post("/api/config/reset")
+
+        assert response.status_code == 200
+        mock_bootstrap.assert_called_once_with(force=True)
+        mock_init.assert_called_once()
+        data = response.get_json()
+        assert data["status"] == "success"
+
+    @patch("chronometry.web_server.init_config")
+    @patch("chronometry.web_server.bootstrap", side_effect=Exception("bootstrap failed"))
+    def test_reset_config_handles_error(self, mock_bootstrap, mock_init):
+        """Test that reset endpoint handles errors gracefully."""
+        with app.test_client() as client:
+            response = client.post("/api/config/reset")
+
+        assert response.status_code == 500
+        data = response.get_json()
+        assert data["status"] == "error"
+
+
+class TestConfigUpdateValidation:
+    """Tests for PUT /api/config input validation."""
+
+    def test_update_config_rejects_null_body(self):
+        """Test that non-dict JSON body returns 400."""
+        with app.test_client() as client:
+            response = client.put(
+                "/api/config",
+                json=[1, 2, 3],
+            )
+        assert response.status_code == 400
+        data = response.get_json()
+        assert "JSON object" in data["message"]
+
+    @patch("chronometry.web_server.backup_config")
+    def test_update_config_rejects_non_dict_section(self, mock_backup, tmp_path, monkeypatch):
+        """Test that non-dict section values return 400."""
+        import chronometry.web_server as ws
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        user_config = config_dir / "user_config.yaml"
+        user_config.write_text("# empty\n")
+        monkeypatch.setattr(ws, "CHRONOMETRY_HOME", tmp_path)
+
+        with app.test_client() as client:
+            response = client.put(
+                "/api/config",
+                json={"capture": "not a dict"},
+            )
+        assert response.status_code == 400
+        data = response.get_json()
+        assert "'capture' must be a JSON object" in data["message"]
+
+
+class TestSystemHealthEndpoint:
+    """Tests for /api/system-health endpoint."""
+
+    def test_system_health_snapshot_shape(self):
+        expected = {
+            "server_start_time": "2026-03-02T10:00:00",
+            "uptime_seconds": 42,
+            "capture": {"attempted": 1, "succeeded": 1, "skipped_locked": 0, "skipped_camera": 0, "failed": 0},
+            "annotation": {"runs": 1, "frames_attempted": 1, "frames_succeeded": 1, "frames_failed": 0},
+            "llm": {
+                "vision_calls": 1,
+                "vision_succeeded": 1,
+                "vision_failed": 0,
+                "text_calls": 1,
+                "text_succeeded": 1,
+                "text_failed": 0,
+                "text_empty_content": 0,
+            },
+            "digest": {"generated": 1, "failed": 0, "cached_hits": 0},
+        }
+
+        with patch("chronometry.runtime_stats.stats.snapshot", return_value=expected):
+            with app.test_client() as client:
+                response = client.get("/api/system-health")
+
+        assert response.status_code == 200
+        assert response.get_json() == expected
+
+    def test_system_health_handles_error(self):
+        with patch("chronometry.runtime_stats.stats.snapshot", side_effect=Exception("boom")):
+            with app.test_client() as client:
+                response = client.get("/api/system-health")
+
+        assert response.status_code == 500
+        data = response.get_json()
+        assert data["error"] == "Failed to load system health"
+
+
+class TestSecretKeyWarning:
+    """Tests for secret key warning at startup."""
+
+    @patch("chronometry.web_server.load_config")
+    @patch("chronometry.web_server.ensure_absolute_path")
+    @patch("chronometry.web_server.logger")
+    def test_warns_on_default_secret_key(self, mock_logger, mock_ensure, mock_load):
+        """Test that a warning is logged when SECRET_KEY is the insecure default."""
+        mock_load.return_value = {
+            "root_dir": "./data",
+            "server": {"secret_key": "change-me-in-production"},
+        }
+        mock_ensure.return_value = "/abs/data"
+
+        init_config()
+
+        mock_logger.warning.assert_any_call(
+            "SECRET_KEY is the insecure default! "
+            "Run 'chrono init' or set server.secret_key in user_config.yaml."
+        )
 
 
 if __name__ == "__main__":

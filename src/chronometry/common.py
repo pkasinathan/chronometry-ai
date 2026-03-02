@@ -106,12 +106,47 @@ def deep_merge(base: dict, override: dict) -> dict:
 # ============================================================================
 
 
+def backup_config(config_path: Path) -> Path | None:
+    """Create a timestamped backup of a config file before overwriting.
+
+    Args:
+        config_path: Path to the config file to back up
+
+    Returns:
+        Path to the backup file, or None if backup failed or file doesn't exist
+    """
+    if not config_path.exists():
+        return None
+
+    backup_dir = config_path.parent / "backup"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    backup_name = f"{config_path.stem}.{timestamp}{config_path.suffix}"
+    backup_path = backup_dir / backup_name
+    collision_index = 1
+    while backup_path.exists():
+        backup_name = f"{config_path.stem}.{timestamp}.{collision_index}{config_path.suffix}"
+        backup_path = backup_dir / backup_name
+        collision_index += 1
+
+    try:
+        shutil.copy2(str(config_path), str(backup_path))
+        logger.info(f"Created backup: {backup_path}")
+        return backup_path
+    except Exception as e:
+        logger.warning(f"Failed to create backup of {config_path.name}: {e}")
+        return None
+
+
 def bootstrap(force: bool = False):
     """Initialize ~/.chronometry with default configs and directories.
 
     Copies default configuration files from the package to CHRONOMETRY_HOME
     if they don't already exist. Creates all required runtime directories.
     Generates a unique secret_key for Flask session security.
+
+    When force=True, existing config files are backed up before overwriting.
 
     Args:
         force: If True, overwrite existing config files with defaults
@@ -128,6 +163,13 @@ def bootstrap(force: bool = False):
     for name in ("user_config.yaml", "system_config.yaml"):
         dest = config_dir / name
         if not dest.exists() or force:
+            if force and dest.exists():
+                backup_path = backup_config(dest)
+                if backup_path is None and dest.exists():
+                    raise RuntimeError(
+                        f"Failed to back up {dest.name} before overwriting. "
+                        f"Aborting to prevent data loss."
+                    )
             src_text = defaults.joinpath(name).read_text()
             if name == "system_config.yaml":
                 src_text = src_text.replace(
@@ -183,10 +225,10 @@ def load_config(
 
         try:
             with open(system_config_file) as f:
-                system_config = yaml.safe_load(f)
+                system_config = yaml.safe_load(f) or {}
 
             with open(user_config_file) as f:
-                user_config = yaml.safe_load(f)
+                user_config = yaml.safe_load(f) or {}
 
             config = deep_merge(system_config, user_config)
 

@@ -9,6 +9,14 @@
 
 Chronometry captures periodic screenshots of your desktop, annotates them with a local vision model (Ollama), and generates daily digests of your work activities — all running entirely on your machine.
 
+## What's New (1.0.18)
+
+- **System Health panel** in Settings with live counters for capture, annotation, LLM calls, digest generation, and uptime
+- **Reset to Defaults** in Settings (with automatic config backups)
+- **Config model cleanup**: `system_config.yaml` now contains all defaults; `user_config.yaml` stores overrides only
+- **Digest prompt templates** are editable in the dashboard
+- **Improved privacy UX** for skipped captures (clear placeholder instead of broken image areas)
+
 ## Features
 
 - **Screenshot Capture** — Periodic screenshots with configurable intervals, automatic downscaling for inference, pre-capture notifications, and screen lock detection
@@ -83,8 +91,9 @@ brew install ollama
 # Start Ollama as a background service (auto-starts at login)
 brew services start ollama
 
-# Pull the vision model (used for screenshot annotation)
-ollama pull qwen2.5vl:7b
+# Pull the models
+ollama pull qwen3-vl:8b
+ollama pull qwen2.5vl:7b    # fallback model
 ```
 
 ### Install
@@ -194,8 +203,8 @@ All runtime data lives in `~/.chronometry/` (overridable via `CHRONOMETRY_HOME` 
 ```
 ~/.chronometry/
 ├── config/
-│   ├── user_config.yaml     # User preferences (intervals, prompts)
-│   ├── system_config.yaml   # System settings (ports, models, paths)
+│   ├── system_config.yaml   # ALL defaults (single source of truth)
+│   ├── user_config.yaml     # User overrides only (starts empty)
 │   └── backup/              # Auto-backups before config changes
 ├── data/
 │   ├── frames/              # Screenshots by date (YYYY-MM-DD/)
@@ -205,6 +214,8 @@ All runtime data lives in `~/.chronometry/` (overridable via `CHRONOMETRY_HOME` 
 │   │       ├── 20260301_143000_meta.json      # OS metadata (app, title, URL)
 │   │       └── 20260301_143000.json           # AI annotation
 │   ├── digests/             # Cached daily digests
+│   ├── runtime_stats.json   # Shared runtime health counters
+│   ├── runtime_stats.lock   # File lock for multi-process counter updates
 │   └── token_usage/         # LLM token tracking
 ├── logs/                    # Service logs
 └── output/                  # Generated timeline HTML
@@ -212,31 +223,16 @@ All runtime data lives in `~/.chronometry/` (overridable via `CHRONOMETRY_HOME` 
 
 ## Configuration
 
-### User Config (`~/.chronometry/config/user_config.yaml`)
+### Defaults (`~/.chronometry/config/system_config.yaml`)
 
-```yaml
-capture:
-  capture_interval_seconds: 900   # 15 minutes
-  monitor_index: 1                # Which monitor (0 = all)
-  retention_days: 1095            # ~3 years
+All defaults live in `system_config.yaml` — capture intervals, annotation prompts, model names, digest prompts, notifications, server settings, categories, and more.
 
-annotation:
-  annotation_mode: manual         # "manual" or "auto"
-  screenshot_analysis_batch_size: 1
-  inference_image_max_edge: 1280  # Downscale longest edge for VLM
-  inference_image_quality: 80     # JPEG quality for inference image
-  screenshot_analysis_prompt: |   # Structured JSON extraction prompt
-    You are a productivity logger. ...
+### Overrides (`~/.chronometry/config/user_config.yaml`)
 
-notifications:
-  enabled: true
-  notify_before_capture: true
-  pre_capture_warning_seconds: 5
-```
+Starts empty. Add only the settings you want to change — they override the matching keys in `system_config.yaml`. Use the **Settings** tab in the web dashboard, or edit the file directly.
 
-### System Config (`~/.chronometry/config/system_config.yaml`)
-
-Model settings, server port, logging, and category definitions. Edit directly or via the web dashboard.
+Reset to defaults anytime: `chrono init --force` (backs up existing config first).
+You can also reset from the dashboard using **Settings > Reset to Defaults**.
 
 ### LLM Backends
 
@@ -247,7 +243,9 @@ Chronometry supports two local backends:
 | **Ollama** (default) | `ollama` | Easiest setup, auto-start, crash recovery |
 | **OpenAI-compatible** | `openai_compatible` | vLLM, LM Studio, llama.cpp servers |
 
-Configure in `system_config.yaml` under `annotation.local_model` and `digest.local_model`.
+Configured in `system_config.yaml` under `annotation.local_model` and `digest.local_model`.
+
+Default primary model: `qwen3-vl:8b`. Fallback: `qwen2.5vl:7b`.
 
 ### Environment Variables
 
@@ -278,6 +276,10 @@ make test-cov
 # All quality checks
 make check
 ```
+
+## Release Process
+
+Use the release checklist in `RELEASE.md` before publishing.
 
 ## Uninstall
 

@@ -124,8 +124,8 @@ def call_vision_api_with_retry(
     if max_retries is None:
         max_retries = local_config.get("max_retries", 3)
 
-    primary_model = local_config.get("model_name", "qwen2.5vl:7b")
-    fallback_model = local_config.get("fallback_model_name", "moondream")
+    primary_model = local_config.get("model_name", "qwen3-vl:8b")
+    fallback_model = local_config.get("fallback_model_name", "qwen2.5vl:7b")
 
     models = [(primary_model, "primary"), (fallback_model, "fallback")]
 
@@ -165,15 +165,15 @@ def format_summary_with_llm(raw_summary: str, config: dict, batch_size: int) -> 
 
     if not format_prompt_template:
         format_prompt_template = (
-            "You are formatting a work activity summary that may contain multiple "
-            "distinct activities.\n\n"
+            "You are formatting a work activity summary from a single screenshot capture.\n\n"
+            "CRITICAL RULE: Each screenshot represents ONE activity. Consolidate all "
+            "information into a SINGLE title block. Do NOT split into multiple activities.\n\n"
             "YOUR TASK:\n"
-            "1. Identify distinct activities (separated by blank lines or context shifts)\n"
-            "2. For EACH activity, format with a bold title followed by indented bullet points\n"
-            "3. Add proper markdown spacing (blank line between activities)\n"
-            "4. Keep all factual details (repo names, PR numbers, file paths, commits, etc.)\n"
-            "5. Remove any redundancy within each activity description\n"
-            "6. Ensure consistent first-person voice\n\n"
+            "1. Merge all details into ONE coherent activity description\n"
+            "2. Format with a bold title followed by indented bullet points\n"
+            "3. Keep all factual details (repo names, PR numbers, file paths, commits, etc.)\n"
+            "4. Remove any redundancy or repetition\n"
+            "5. Ensure consistent first-person voice\n\n"
             "Return ONLY the formatted content, no preamble or explanation."
         )
 
@@ -185,18 +185,21 @@ def format_summary_with_llm(raw_summary: str, config: dict, batch_size: int) -> 
             prompt=formatting_prompt, config=config, max_tokens=1000, context=f"Formatting {batch_size} frame batch"
         )
 
-        formatted_summary = result.get("content", raw_summary)
+        formatted_summary = result.get("content") or raw_summary
         tokens_used = result.get("tokens", 0)
 
-        if tokens_used > 0:
-            tracker = TokenUsageTracker(config["root_dir"])
-            tracker.log_tokens(
-                api_type="annotation_format",
-                tokens=tokens_used,
-                prompt_tokens=result.get("prompt_tokens", 0),
-                completion_tokens=result.get("completion_tokens", 0),
-                context=f"Formatting {batch_size} frame batch",
-            )
+        try:
+            if tokens_used > 0:
+                tracker = TokenUsageTracker(config["root_dir"])
+                tracker.log_tokens(
+                    api_type="annotation_format",
+                    tokens=tokens_used,
+                    prompt_tokens=result.get("prompt_tokens", 0),
+                    completion_tokens=result.get("completion_tokens", 0),
+                    context=f"Formatting {batch_size} frame batch",
+                )
+        except Exception as e:
+            logger.warning(f"Token tracking failed (summary preserved): {e}")
 
         logger.info(f"Summary formatted successfully (used {tokens_used} tokens)")
         return formatted_summary, tokens_used
@@ -209,6 +212,8 @@ def format_summary_with_llm(raw_summary: str, config: dict, batch_size: int) -> 
 
 def process_batch(image_paths: list[Path], config: dict):
     """Process a batch of images through the API with retry logic."""
+    from chronometry.runtime_stats import stats
+
     annotation_config = config["annotation"]
     json_suffix = annotation_config.get("json_suffix", ".json")
 
@@ -218,6 +223,7 @@ def process_batch(image_paths: list[Path], config: dict):
     max_edge = annotation_config.get("inference_image_max_edge", 1280)
     quality = annotation_config.get("inference_image_quality", 80)
     images = []
+    successful_image_paths: list[Path] = []
     for idx, image_path in enumerate(image_paths):
         try:
             inference_path = image_path.with_name(image_path.stem + "_inference.jpg")
@@ -227,12 +233,15 @@ def process_batch(image_paths: list[Path], config: dict):
             logger.info(f"Annotating: {inference_path.name}")
             base64_data = encode_image_to_base64(inference_path)
             images.append({"name": f"frame{idx}", "content_type": "image/jpeg", "base64_data": base64_data})
+            successful_image_paths.append(image_path)
         except Exception as e:
             logger.error(f"Failed to process image {image_path}: {e}")
             continue
 
     if not images:
         logger.error("No images to process in batch")
+        stats.record("annotation.frames_attempted", len(image_paths))
+        stats.record("annotation.frames_failed", len(image_paths))
         return
 
     # V2: Build prompt with metadata and recent context
@@ -248,12 +257,21 @@ def process_batch(image_paths: list[Path], config: dict):
     recent_context = get_recent_summaries(first_image.parent, first_image.stem)
     prompt_override = build_prompt(config, metadata=metadata, recent_context=recent_context)
 
+    stats.record("annotation.frames_attempted", len(image_paths))
+    preprocessed_failed = len(image_paths) - len(successful_image_paths)
+    if preprocessed_failed > 0:
+        stats.record("annotation.frames_failed", preprocessed_failed)
+
+    saved_count = 0
     try:
         logger.info(f"Calling vision API with {len(images)} images...")
         result = call_vision_api_with_retry(images, config, prompt_override=prompt_override)
 
         if result is None:
-            logger.warning(f"Skipping annotation for {len(image_paths)} frames — all models failed")
+            remaining = len(successful_image_paths) - saved_count
+            logger.warning(f"Skipping annotation for {remaining} frames — all models failed")
+            if remaining > 0:
+                stats.record("annotation.frames_failed", remaining)
             return
 
         # Get the raw summary
@@ -272,7 +290,7 @@ def process_batch(image_paths: list[Path], config: dict):
                 logger.info("Summary formatting disabled in config")
             summary_to_save = raw_summary
 
-        for image_path in image_paths:
+        for image_path in successful_image_paths:
             json_path = get_json_path(image_path, json_suffix)
 
             inference_jpg = image_path.with_name(image_path.stem + "_inference.jpg")
@@ -297,9 +315,15 @@ def process_batch(image_paths: list[Path], config: dict):
 
             save_json(json_path, json_data)
             logger.info(f"Saved annotation: {json_path.name}")
+            saved_count += 1
+
+        stats.record("annotation.frames_succeeded", saved_count)
 
     except Exception as e:
         logger.error(f"Error processing batch: {e}", exc_info=True)
+        remaining = len(successful_image_paths) - saved_count
+        if remaining > 0:
+            stats.record("annotation.frames_failed", remaining)
 
 
 def annotate_frames(config: dict, date: datetime = None) -> int:
@@ -311,6 +335,8 @@ def annotate_frames(config: dict, date: datetime = None) -> int:
     Returns:
         Number of frames that were annotated (0 if waiting for batch_size)
     """
+    from chronometry.runtime_stats import stats
+
     root_dir = config["root_dir"]
     annotation_config = config["annotation"]
     batch_size = annotation_config.get("screenshot_analysis_batch_size", 1)
@@ -367,6 +393,7 @@ def annotate_frames(config: dict, date: datetime = None) -> int:
     unannotated.sort()
 
     logger.info(f"Found {len(unannotated)} total unannotated frames, processing in batches of {batch_size}")
+    stats.record("annotation.runs")
 
     # Process in batches
     total_batches = (len(unannotated) + batch_size - 1) // batch_size

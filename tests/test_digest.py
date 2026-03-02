@@ -92,7 +92,7 @@ class TestTextAPI:
         test_config["digest"]["local_model"] = {
             "provider": "ollama",
             "base_url": "http://localhost:11434",
-            "model_name": "qwen2.5:7b",
+            "model_name": "qwen3-vl:8b",
             "timeout_sec": 120,
         }
 
@@ -422,8 +422,9 @@ class TestDigestGeneration:
     @patch("chronometry.digest.calculate_stats")
     @patch("chronometry.digest.group_activities")
     @patch("chronometry.digest.load_annotations")
+    @patch("chronometry.runtime_stats.stats.record")
     def test_generate_daily_digest_success(
-        self, mock_load, mock_group, mock_stats, mock_cat_sum, mock_overall, test_config, tmp_path
+        self, mock_rt_record, mock_load, mock_group, mock_stats, mock_cat_sum, mock_overall, test_config, tmp_path
     ):
         """Test successful digest generation."""
         # Setup directory
@@ -453,6 +454,29 @@ class TestDigestGeneration:
         # Verify cache file was created
         cache_file = tmp_path / "digests" / "digest_2025-11-01.json"
         assert cache_file.exists()
+        mock_rt_record.assert_any_call("digest.generated")
+
+    @patch("chronometry.digest.generate_category_summaries", side_effect=Exception("llm boom"))
+    @patch("chronometry.digest.calculate_stats")
+    @patch("chronometry.digest.group_activities")
+    @patch("chronometry.digest.load_annotations")
+    @patch("chronometry.runtime_stats.stats.record")
+    def test_generate_daily_digest_records_failed_counter(
+        self, mock_rt_record, mock_load, mock_group, mock_stats, mock_cat_sum, test_config, tmp_path
+    ):
+        """Digest generation failures should return fallback payload and increment failed counter."""
+        daily_dir = tmp_path / "frames" / "2025-11-01"
+        daily_dir.mkdir(parents=True)
+        mock_load.return_value = [{"datetime": datetime(2025, 11, 1, 10, 0), "summary": "Activity"}]
+        mock_group.return_value = [
+            {"category": "Code", "start_time": datetime(2025, 11, 1, 10, 0), "end_time": datetime(2025, 11, 1, 10, 30)}
+        ]
+        mock_stats.return_value = {"focus_percentage": 80, "category_breakdown": {}}
+
+        digest = generate_daily_digest(datetime(2025, 11, 1), test_config)
+
+        assert "Generation failed" in digest["error"]
+        mock_rt_record.assert_any_call("digest.failed")
 
     def test_generate_daily_digest_no_data(self, test_config, tmp_path):
         """Test digest generation with no data directory."""
@@ -550,8 +574,9 @@ class TestDigestCaching:
         # Should return None on error
         assert digest is None
 
+    @patch("chronometry.runtime_stats.stats.record")
     @patch("chronometry.digest.generate_daily_digest")
-    def test_get_or_generate_uses_cache(self, mock_generate, test_config, tmp_path):
+    def test_get_or_generate_uses_cache(self, mock_generate, mock_rt_record, test_config, tmp_path):
         """Test that get_or_generate uses cache when available."""
         # Create cache file
         cache_dir = tmp_path / "digests"
@@ -564,6 +589,7 @@ class TestDigestCaching:
         assert digest["overall_summary"] == "Cached summary"
         # Verify generate was not called
         mock_generate.assert_not_called()
+        mock_rt_record.assert_any_call("digest.cached_hits")
 
     @patch("chronometry.digest.generate_daily_digest")
     def test_get_or_generate_no_cache(self, mock_generate, test_config, tmp_path):
@@ -591,6 +617,71 @@ class TestDigestCaching:
         # Verify it used generated, not cached
         assert digest["overall_summary"] == "New summary"
         mock_generate.assert_called_once()
+
+
+class TestDigestPromptTemplateSubstitution:
+    """Tests for digest prompt template substitution from config."""
+
+    @patch("chronometry.digest.call_text_llm")
+    def test_category_prompt_uses_config_template(self, mock_llm, sample_config):
+        """Test that generate_category_summaries uses digest_category_prompt from config."""
+        from chronometry.digest import generate_category_summaries
+
+        custom_template = "CUSTOM: Summarize {category} work:\n{activity_descriptions}"
+        sample_config["digest"]["digest_category_prompt"] = custom_template
+
+        mock_llm.return_value = {"content": "Summary text", "tokens": 10}
+
+        activities = [
+            {
+                "timestamp": "20260302_100000",
+                "summary": "Wrote unit tests",
+                "category": "Development",
+                "icon": "\U0001f4bb",
+                "color": "#4CAF50",
+                "start_time": datetime(2026, 3, 2, 10, 0, 0),
+                "end_time": datetime(2026, 3, 2, 10, 30, 0),
+            },
+        ]
+
+        result = generate_category_summaries(activities, sample_config)
+
+        call_args = mock_llm.call_args
+        prompt = call_args[0][0]
+        assert "CUSTOM: Summarize Development work:" in prompt
+        assert "Wrote unit tests" in prompt
+
+    @patch("chronometry.digest.call_text_llm")
+    def test_overall_prompt_substitutes_all_placeholders(self, mock_llm, sample_config):
+        """Test that generate_overall_summary substitutes all 4 placeholders."""
+        from chronometry.digest import generate_overall_summary
+
+        custom_template = (
+            "Total: {total_activities}, Focus: {focus_percentage}%, "
+            "Top: {top_categories}, Activities: {sample_activities}"
+        )
+        sample_config["digest"]["digest_overall_prompt"] = custom_template
+
+        mock_llm.return_value = {"content": "Overall summary", "tokens": 20}
+
+        all_activities = [
+            {"timestamp": "20260302_100000", "summary": "Wrote tests", "category": "Development", "icon": "\U0001f4bb", "color": "#4CAF50"},
+        ] * 5
+        stats = {
+            "focus_percentage": 85,
+            "category_breakdown": {"Development": 120},
+        }
+
+        result = generate_overall_summary(all_activities, stats, sample_config)
+
+        call_args = mock_llm.call_args
+        prompt = call_args[0][0]
+        assert "Total: 5" in prompt
+        assert "Top: Development" in prompt
+        assert "{total_activities}" not in prompt
+        assert "{focus_percentage}" not in prompt
+        assert "{top_categories}" not in prompt
+        assert "{sample_activities}" not in prompt
 
 
 if __name__ == "__main__":

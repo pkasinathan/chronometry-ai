@@ -35,7 +35,7 @@ class TestVisionRouting:
                 "local_model": {
                     "provider": "ollama",
                     "base_url": "http://localhost:11434",
-                    "model_name": "qwen2.5vl:7b",
+                    "model_name": "qwen3-vl:8b",
                     "timeout_sec": 60,
                 },
             }
@@ -84,6 +84,41 @@ class TestVisionRouting:
             result = call_vision_api([], config)
             mock_fn.assert_called_once()
 
+    @patch("chronometry.llm_backends.call_openai_vision")
+    def test_passes_model_override_to_openai_provider(self, mock_fn):
+        mock_fn.return_value = {"summary": "vllm", "sources": []}
+        config = {
+            "annotation": {
+                "screenshot_analysis_prompt": "t",
+                "local_model": {"provider": "openai_compatible"},
+            }
+        }
+        call_vision_api([], config, model_override="Qwen/Qwen3-VL-8B-Instruct")
+        mock_fn.assert_called_once_with(
+            [],
+            config,
+            prompt_override=None,
+            model_override="Qwen/Qwen3-VL-8B-Instruct",
+        )
+
+    @patch("chronometry.runtime_stats.stats.record")
+    @patch("chronometry.llm_backends.call_ollama_vision")
+    def test_records_runtime_stats_on_vision_success(self, mock_fn, mock_record):
+        mock_fn.return_value = {"summary": "ok", "sources": []}
+        config = {"annotation": {"local_model": {"provider": "ollama"}}}
+        call_vision_api([], config)
+        mock_record.assert_any_call("llm.vision_calls")
+        mock_record.assert_any_call("llm.vision_succeeded")
+
+    @patch("chronometry.runtime_stats.stats.record")
+    @patch("chronometry.llm_backends.call_ollama_vision", side_effect=RuntimeError("vision failed"))
+    def test_records_runtime_stats_on_vision_failure(self, mock_fn, mock_record):
+        config = {"annotation": {"local_model": {"provider": "ollama"}}}
+        with pytest.raises(RuntimeError, match="vision failed"):
+            call_vision_api([], config)
+        mock_record.assert_any_call("llm.vision_calls")
+        mock_record.assert_any_call("llm.vision_failed")
+
 
 # ---------------------------------------------------------------------------
 # Text API routing
@@ -130,6 +165,33 @@ class TestTextRouting:
         config = {"digest": {"local_model": {"provider": "bad"}}}
         with pytest.raises(ValueError, match="bad"):
             call_text_api("hello", config)
+
+    @patch("chronometry.runtime_stats.stats.record")
+    @patch("chronometry.llm_backends.call_ollama_text")
+    def test_records_runtime_stats_on_text_success(self, mock_fn, mock_record):
+        mock_fn.return_value = {"content": "ok", "tokens": 10, "prompt_tokens": 5, "completion_tokens": 5}
+        config = {"digest": {"local_model": {"provider": "ollama"}}}
+        call_text_api("hello", config)
+        mock_record.assert_any_call("llm.text_calls")
+        mock_record.assert_any_call("llm.text_succeeded")
+
+    @patch("chronometry.runtime_stats.stats.record")
+    @patch("chronometry.llm_backends.call_ollama_text")
+    def test_records_empty_content_branch(self, mock_fn, mock_record):
+        mock_fn.return_value = {"content": "", "tokens": 42, "prompt_tokens": 20, "completion_tokens": 22}
+        config = {"digest": {"local_model": {"provider": "ollama"}}}
+        call_text_api("hello", config)
+        mock_record.assert_any_call("llm.text_empty_content")
+        mock_record.assert_any_call("llm.text_succeeded")
+
+    @patch("chronometry.runtime_stats.stats.record")
+    @patch("chronometry.llm_backends.call_ollama_text", side_effect=RuntimeError("text failed"))
+    def test_records_runtime_stats_on_text_failure(self, mock_fn, mock_record):
+        config = {"digest": {"local_model": {"provider": "ollama"}}}
+        with pytest.raises(RuntimeError, match="text failed"):
+            call_text_api("hello", config)
+        mock_record.assert_any_call("llm.text_calls")
+        mock_record.assert_any_call("llm.text_failed")
 
 
 # ---------------------------------------------------------------------------
@@ -193,7 +255,7 @@ class TestRaiseOrRestartOllama:
         _raise_or_restart_ollama(resp, "http://localhost:11434")
 
     def test_404_model_not_found_raises_model_not_found_error(self):
-        resp = self._make_response(404, {"error": "model 'qwen2.5:7b' not found"})
+        resp = self._make_response(404, {"error": "model 'qwen3-vl:8b' not found"})
         with pytest.raises(ModelNotFoundError):
             _raise_or_restart_ollama(resp, "http://localhost:11434")
 
@@ -216,23 +278,23 @@ class TestPullOllamaModel:
     @patch("chronometry.llm_backends.requests.post")
     def test_successful_pull(self, mock_post):
         mock_post.return_value = MagicMock(ok=True)
-        assert _pull_ollama_model("http://localhost:11434", "qwen2.5:7b") is True
+        assert _pull_ollama_model("http://localhost:11434", "qwen3-vl:8b") is True
 
     @patch("chronometry.llm_backends.requests.post")
     def test_failed_pull(self, mock_post):
         resp = MagicMock(ok=False, status_code=500, text="server error")
         mock_post.return_value = resp
-        assert _pull_ollama_model("http://localhost:11434", "qwen2.5:7b") is False
+        assert _pull_ollama_model("http://localhost:11434", "qwen3-vl:8b") is False
 
     @patch("chronometry.llm_backends.requests.post")
     def test_timeout_pull(self, mock_post):
         mock_post.side_effect = requests.Timeout("timed out")
-        assert _pull_ollama_model("http://localhost:11434", "qwen2.5:7b") is False
+        assert _pull_ollama_model("http://localhost:11434", "qwen3-vl:8b") is False
 
     @patch("chronometry.llm_backends.requests.post")
     def test_connection_error_pull(self, mock_post):
         mock_post.side_effect = requests.ConnectionError("refused")
-        assert _pull_ollama_model("http://localhost:11434", "qwen2.5:7b") is False
+        assert _pull_ollama_model("http://localhost:11434", "qwen3-vl:8b") is False
 
 
 class TestOllamaTextAutoPull:
@@ -247,7 +309,7 @@ class TestOllamaTextAutoPull:
                 "local_model": {
                     "provider": "ollama",
                     "base_url": "http://localhost:11434",
-                    "model_name": "qwen2.5:7b",
+                    "model_name": "qwen3-vl:8b",
                     "timeout_sec": 60,
                 },
             },
@@ -279,8 +341,8 @@ class TestOllamaTextAutoPull:
         not_found_resp = MagicMock(spec=requests.Response)
         not_found_resp.ok = False
         not_found_resp.status_code = 404
-        not_found_resp.json.return_value = {"error": "model 'qwen2.5:7b' not found"}
-        not_found_resp.text = "model 'qwen2.5:7b' not found"
+        not_found_resp.json.return_value = {"error": "model 'qwen3-vl:8b' not found"}
+        not_found_resp.text = "model 'qwen3-vl:8b' not found"
 
         ok_resp = MagicMock(spec=requests.Response)
         ok_resp.ok = True
@@ -295,7 +357,7 @@ class TestOllamaTextAutoPull:
 
         result = call_ollama_text("test prompt", text_config)
         assert result["content"] == "pulled and ready"
-        mock_pull.assert_called_once_with("http://localhost:11434", "qwen2.5:7b")
+        mock_pull.assert_called_once_with("http://localhost:11434", "qwen3-vl:8b")
         assert mock_post.call_count == 2
 
     @patch("chronometry.llm_backends.ensure_ollama_running")
@@ -306,8 +368,8 @@ class TestOllamaTextAutoPull:
         not_found_resp = MagicMock(spec=requests.Response)
         not_found_resp.ok = False
         not_found_resp.status_code = 404
-        not_found_resp.json.return_value = {"error": "model 'qwen2.5:7b' not found"}
-        not_found_resp.text = "model 'qwen2.5:7b' not found"
+        not_found_resp.json.return_value = {"error": "model 'qwen3-vl:8b' not found"}
+        not_found_resp.text = "model 'qwen3-vl:8b' not found"
 
         mock_post.return_value = not_found_resp
 
@@ -327,7 +389,7 @@ class TestOllamaVisionAutoPull:
                 "local_model": {
                     "provider": "ollama",
                     "base_url": "http://localhost:11434",
-                    "model_name": "qwen2.5vl:7b",
+                    "model_name": "qwen3-vl:8b",
                     "timeout_sec": 60,
                 },
             },
@@ -341,8 +403,8 @@ class TestOllamaVisionAutoPull:
         not_found_resp = MagicMock(spec=requests.Response)
         not_found_resp.ok = False
         not_found_resp.status_code = 404
-        not_found_resp.json.return_value = {"error": "model 'qwen2.5vl:7b' not found"}
-        not_found_resp.text = "model 'qwen2.5vl:7b' not found"
+        not_found_resp.json.return_value = {"error": "model 'qwen3-vl:8b' not found"}
+        not_found_resp.text = "model 'qwen3-vl:8b' not found"
 
         ok_resp = MagicMock(spec=requests.Response)
         ok_resp.ok = True
@@ -354,7 +416,7 @@ class TestOllamaVisionAutoPull:
         images = [{"base64_data": "abc123", "content_type": "image/jpeg"}]
         result = call_ollama_vision(images, vision_config)
         assert result["summary"] == "activity description"
-        mock_pull.assert_called_once_with("http://localhost:11434", "qwen2.5vl:7b")
+        mock_pull.assert_called_once_with("http://localhost:11434", "qwen3-vl:8b")
 
     @patch("chronometry.llm_backends.ensure_ollama_running")
     @patch("chronometry.llm_backends._pull_ollama_model", return_value=False)
@@ -364,8 +426,8 @@ class TestOllamaVisionAutoPull:
         not_found_resp = MagicMock(spec=requests.Response)
         not_found_resp.ok = False
         not_found_resp.status_code = 404
-        not_found_resp.json.return_value = {"error": "model 'qwen2.5vl:7b' not found"}
-        not_found_resp.text = "model 'qwen2.5vl:7b' not found"
+        not_found_resp.json.return_value = {"error": "model 'qwen3-vl:8b' not found"}
+        not_found_resp.text = "model 'qwen3-vl:8b' not found"
 
         mock_post.return_value = not_found_resp
 
