@@ -110,12 +110,42 @@ def _restart_ollama(base_url: str = "http://localhost:11434", start_timeout: int
     return _start_ollama(ollama_bin, base_url, start_timeout)
 
 
+class ModelNotFoundError(RuntimeError):
+    """Raised when Ollama returns 404 for a model that isn't pulled."""
+
+    def __init__(self, model_name: str, message: str):
+        self.model_name = model_name
+        super().__init__(message)
+
+
+def _pull_ollama_model(base_url: str, model_name: str, timeout: int = 600) -> bool:
+    """Pull an Ollama model via the API. Returns True on success."""
+    logger.info(f"Auto-pulling Ollama model '{model_name}' — this may take several minutes …")
+    try:
+        resp = requests.post(
+            f"{base_url}/api/pull",
+            json={"name": model_name, "stream": False},
+            timeout=timeout,
+        )
+        if resp.ok:
+            logger.info(f"Successfully pulled model '{model_name}'")
+            return True
+        logger.error(f"Failed to pull model '{model_name}': {resp.status_code} {resp.text[:200]}")
+    except requests.Timeout:
+        logger.error(f"Timeout pulling model '{model_name}' (>{timeout}s)")
+    except Exception as e:
+        logger.error(f"Error pulling model '{model_name}': {e}")
+    return False
+
+
 def _raise_or_restart_ollama(response: requests.Response, base_url: str) -> None:
     """Inspect an Ollama HTTP response; restart the server on runner crashes.
 
     If the response is successful this is a no-op.  On a 500 whose body
     mentions a runner crash, Ollama is restarted and a clear exception is
     raised so the caller's retry loop can try again with a healthy server.
+    For 404 model-not-found errors, raises ``ModelNotFoundError`` so the
+    caller can attempt an auto-pull.
     For other errors, raise with the server's error message included.
     """
     if response.ok:
@@ -133,6 +163,9 @@ def _raise_or_restart_ollama(response: requests.Response, base_url: str) -> None
         logger.warning(f"Ollama runner crashed: {error_msg}")
         _restart_ollama(base_url)
         raise RuntimeError(f"Ollama runner crashed (restarted): {error_msg}")
+
+    if response.status_code == 404 and "not found" in error_msg.lower():
+        raise ModelNotFoundError("", error_msg)
 
     raise requests.HTTPError(
         f"{response.status_code} Ollama error: {error_msg}",
@@ -178,17 +211,28 @@ def call_ollama_vision(
 
     logger.info(f"Ollama vision: POST {base_url}/api/chat model={model_name} images={len(images)}")
 
+    payload = {
+        "model": model_name,
+        "messages": [{"role": "user", "content": prompt, "images": [img["base64_data"] for img in images]}],
+        "stream": False,
+    }
+
     with _inference_lock:
-        response = requests.post(
-            f"{base_url}/api/chat",
-            json={
-                "model": model_name,
-                "messages": [{"role": "user", "content": prompt, "images": [img["base64_data"] for img in images]}],
-                "stream": False,
-            },
-            timeout=timeout,
-        )
-    _raise_or_restart_ollama(response, base_url)
+        response = requests.post(f"{base_url}/api/chat", json=payload, timeout=timeout)
+
+    try:
+        _raise_or_restart_ollama(response, base_url)
+    except ModelNotFoundError:
+        if _pull_ollama_model(base_url, model_name):
+            with _inference_lock:
+                response = requests.post(f"{base_url}/api/chat", json=payload, timeout=timeout)
+            _raise_or_restart_ollama(response, base_url)
+        else:
+            raise requests.HTTPError(
+                f"Model '{model_name}' not found and auto-pull failed. Run: ollama pull {model_name}",
+                response=response,
+            )
+
     data = response.json()
 
     summary = data.get("message", {}).get("content", "")
@@ -229,12 +273,22 @@ def call_ollama_text(
 
     logger.info(f"Ollama text: POST {base_url}/api/chat model={model_name}")
 
-    response = requests.post(
-        f"{base_url}/api/chat",
-        json={"model": model_name, "messages": messages, "stream": False, "options": options},
-        timeout=timeout,
-    )
-    _raise_or_restart_ollama(response, base_url)
+    payload = {"model": model_name, "messages": messages, "stream": False, "options": options}
+
+    response = requests.post(f"{base_url}/api/chat", json=payload, timeout=timeout)
+
+    try:
+        _raise_or_restart_ollama(response, base_url)
+    except ModelNotFoundError:
+        if _pull_ollama_model(base_url, model_name):
+            response = requests.post(f"{base_url}/api/chat", json=payload, timeout=timeout)
+            _raise_or_restart_ollama(response, base_url)
+        else:
+            raise requests.HTTPError(
+                f"Model '{model_name}' not found and auto-pull failed. Run: ollama pull {model_name}",
+                response=response,
+            )
+
     data = response.json()
 
     content = data.get("message", {}).get("content", "")
