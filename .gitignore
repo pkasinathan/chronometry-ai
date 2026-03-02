@@ -73,6 +73,11 @@ config/backup/
 .llm/
 .claude/
 .cursor/
+ENHANCE_PRD.md
+
+# Internal dev/QA artifacts
+tests/docs/
+tools/
 
 # Chronometry specific
 *.png.json

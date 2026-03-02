@@ -9,6 +9,10 @@ description = "Privacy-first activity tracker with AI-powered annotation and tim
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
+authors = [
+    {name = "Chronometry Contributors"},
+]
+keywords = ["productivity", "activity-tracker", "screenshot", "ai", "ollama", "vision-model", "macos", "privacy"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "License :: OSI Approved :: Apache Software License",
@@ -52,6 +56,7 @@ chrono-capture = "chronometry.capture:main"
 
 [project.urls]
 Homepage = "https://github.com/pkasinathan/chronometry"
+Documentation = "https://github.com/pkasinathan/chronometry#readme"
 Repository = "https://github.com/pkasinathan/chronometry"
 Issues = "https://github.com/pkasinathan/chronometry/issues"
 Changelog = "https://github.com/pkasinathan/chronometry/blob/main/CHANGELOG.md"
@@ -108,7 +113,6 @@ ignore = [
 "src/chronometry/common.py" = ["E722"]
 "src/chronometry/capture.py" = ["E722"]
 "src/chronometry/menubar_app.py" = ["E722"]
-"src/chronometry/quick_test.py" = ["E722"]
 "tests/*" = ["W293", "W291", "F841", "F401", "F821", "E722", "B007", "B017", "RUF059"]
 
 [tool.ruff.lint.isort]

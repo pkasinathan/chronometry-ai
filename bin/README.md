@@ -54,7 +54,7 @@ Chronometry includes 7 shell scripts that control different aspects of the syste
 
 **Process Flow**:
 ```
-capture.py (continuous - every 300 sec by default - configurable on settings page)
+capture.py (continuous - every 900 sec by default - configurable on settings page)
     ↓
 annotate.py (every 2 min - configurable on settings page)
     ↓
@@ -338,7 +338,7 @@ ps aux | grep menubar  # Should return nothing
 
 | Task | Default Interval | Configurable | Config Location |
 |------|-----------------|--------------|-----------------|
-| Screenshot Capture | 300 seconds (5 min) | Yes | `capture.fps` |
+| Screenshot Capture | 900 seconds (15 min) | Yes | `capture.capture_interval_seconds` |
 | AI Annotation | 2 minutes | Hardcoded | menubar_app.py |
 | Timeline Generation | 5 minutes | Hardcoded | menubar_app.py |
 | **Digest Generation** | **60 minutes** | **Yes** | `digest.interval_seconds` |

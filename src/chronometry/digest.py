@@ -222,22 +222,19 @@ def main():
     try:
         config = load_config()
 
-        # Generate digest for today
         today = datetime.now()
         digest = generate_daily_digest(today, config)
 
-        print(f"\n{'=' * 60}")
-        print(f"Daily Digest for {digest['date']}")
-        print(f"{'=' * 60}\n")
+        logger.info("=" * 60)
+        logger.info("Daily Digest for %s", digest["date"])
+        logger.info("=" * 60)
+        logger.info("Overall Summary:\n%s", digest["overall_summary"])
 
-        print(f"Overall Summary:\n{digest['overall_summary']}\n")
-
-        print("\nCategory Summaries:")
         for category, data in digest["category_summaries"].items():
-            print(f"\n{data['icon']} {category} ({data['count']} activities, {data['duration_minutes']}m):")
-            print(f"  {data['summary']}")
-
-        print(f"\n{'=' * 60}\n")
+            logger.info(
+                "%s %s (%d activities, %dm):\n  %s",
+                data["icon"], category, data["count"], data["duration_minutes"], data["summary"],
+            )
 
     except Exception as e:
         logger.error(f"Fatal error: {e}", exc_info=True)

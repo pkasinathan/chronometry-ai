@@ -634,10 +634,11 @@ def _hide_dock_icon():
             info["LSBackgroundOnly"] = "1"
     except ImportError:
         try:
+            import os as _os
             import subprocess
 
-            plist_path = os.path.join(sys.prefix, "Resources", "Python.app", "Contents", "Info.plist")
-            if os.path.exists(plist_path):
+            plist_path = _os.path.join(sys.prefix, "Resources", "Python.app", "Contents", "Info.plist")
+            if _os.path.exists(plist_path):
                 subprocess.run(
                     ["/usr/libexec/PlistBuddy", "-c", "Add :LSUIElement bool true", plist_path],
                     capture_output=True,
