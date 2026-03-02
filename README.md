@@ -2,6 +2,11 @@
 
 **Privacy-first activity tracker with local AI-powered annotation.**
 
+[![CI](https://github.com/pkasinathan/chronometry-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/pkasinathan/chronometry-ai/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/chronometry-ai)](https://pypi.org/project/chronometry-ai/)
+[![Python](https://img.shields.io/pypi/pyversions/chronometry-ai)](https://pypi.org/project/chronometry-ai/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 Chronometry captures periodic screenshots of your desktop, annotates them with a local vision model (Ollama), and generates daily digests of your work activities — all running entirely on your machine.
 
 ## Features
@@ -273,6 +278,20 @@ make test-cov
 # All quality checks
 make check
 ```
+
+## Uninstall
+
+```bash
+pip3 uninstall chronometry-ai
+```
+
+To also remove all captured data, annotations, and config:
+
+```bash
+rm -rf ~/.chronometry
+```
+
+> **Warning:** Deleting `~/.chronometry` permanently removes all screenshots, annotations, timelines, digests, and configuration. This cannot be undone.
 
 ## License
 
