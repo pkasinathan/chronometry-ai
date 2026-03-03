@@ -256,9 +256,11 @@ def call_ollama_text(
     Returns:
         {"content": str, "tokens": int, "prompt_tokens": int, "completion_tokens": int}
     """
+    # Text calls are currently configured via digest.local_model and reused
+    # for digest generation and annotation summary formatting.
     local_config = config.get("digest", {}).get("local_model", {})
     base_url = local_config.get("base_url", "http://localhost:11434")
-    model_name = local_config.get("model_name", "qwen3:8b")
+    model_name = local_config.get("model_name", "qwen3.5:4b")
     timeout = local_config.get("timeout_sec", 300)
     keep_alive = local_config.get("keep_alive", "1m")
 

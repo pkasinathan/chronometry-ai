@@ -126,6 +126,45 @@ class TestLoadConfig:
             )
         assert "capture_interval_seconds" in str(exc_info.value).lower()
 
+    def test_load_config_validates_screenshot_analysis_batch_size_key(self, tmp_path):
+        """Validation should enforce annotation.screenshot_analysis_batch_size."""
+        user_file = tmp_path / "user_config.yaml"
+        system_file = tmp_path / "system_config.yaml"
+        config_data = {
+            "root_dir": "./data",
+            "capture": {"capture_interval_seconds": 900, "monitor_index": 0},
+            "annotation": {"screenshot_analysis_batch_size": 0, "timeout_sec": 30},
+            "timeline": {"bucket_minutes": 15},
+        }
+        user_file.write_text(yaml.dump(config_data))
+        system_file.write_text(yaml.dump(config_data))
+
+        with pytest.raises(ValueError) as exc_info:
+            load_config(
+                user_config_path=str(user_file),
+                system_config_path=str(system_file),
+            )
+        assert "annotation.screenshot_analysis_batch_size" in str(exc_info.value)
+
+    def test_load_config_supports_legacy_annotation_batch_size_key(self, tmp_path):
+        """Legacy annotation.batch_size should still be accepted for compatibility."""
+        user_file = tmp_path / "user_config.yaml"
+        system_file = tmp_path / "system_config.yaml"
+        config_data = {
+            "root_dir": "./data",
+            "capture": {"capture_interval_seconds": 900, "monitor_index": 0},
+            "annotation": {"batch_size": 2, "timeout_sec": 30},
+            "timeline": {"bucket_minutes": 15},
+        }
+        user_file.write_text(yaml.dump(config_data))
+        system_file.write_text(yaml.dump(config_data))
+
+        loaded = load_config(
+            user_config_path=str(user_file),
+            system_config_path=str(system_file),
+        )
+        assert loaded["annotation"]["batch_size"] == 2
+
 
 class TestGetDailyDir:
     """Tests for get_daily_dir function."""

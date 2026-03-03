@@ -285,9 +285,9 @@ def load_config(
     if not isinstance(config["annotation"], dict):
         raise ValueError("'annotation' section must be a dictionary")
 
-    batch_size = config["annotation"].get("batch_size", 1)
+    batch_size = config["annotation"].get("screenshot_analysis_batch_size", config["annotation"].get("batch_size", 1))
     if not isinstance(batch_size, int) or batch_size < 1:
-        raise ValueError("annotation.batch_size must be a positive integer")
+        raise ValueError("annotation.screenshot_analysis_batch_size must be a positive integer")
 
     if not isinstance(config["timeline"], dict):
         raise ValueError("'timeline' section must be a dictionary")

@@ -152,8 +152,9 @@ Starts empty. Add only the settings you want to change — they override the mat
 
 Configure under `annotation.local_model` and `digest.local_model` in `system_config.yaml`.
 
-Default primary model: `qwen3-vl:8b` (pull with `ollama pull qwen3-vl:8b`).
+Default vision model: `qwen3-vl:8b` (pull with `ollama pull qwen3-vl:8b`).
 Fallback vision model: `qwen2.5vl:7b`.
+Default text model: `qwen3.5:4b` (digest and post-format calls).
 
 ---
 
@@ -162,11 +163,12 @@ Fallback vision model: `qwen2.5vl:7b`.
 ### First-time setup
 
 ```bash
-# 1. Install Ollama and pull the vision model
+# 1. Install Ollama and pull the models
 brew install ollama
 brew services start ollama
 ollama pull qwen3-vl:8b
 ollama pull qwen2.5vl:7b    # fallback model
+ollama pull qwen3.5:4b      # text model
 
 # 2. Install chronometry
 pip3 install chronometry-ai

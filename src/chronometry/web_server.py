@@ -135,17 +135,17 @@ def get_config():
             },
             "annotation": {
                 "backend": config["annotation"].get("backend", "local"),
-                "annotation_mode": config["annotation"].get("annotation_mode", "auto"),
+                "annotation_mode": config["annotation"].get("annotation_mode", "manual"),
                 "annotation_interval_hours": config["annotation"].get("annotation_interval_hours", 4),
                 "screenshot_analysis_batch_size": config["annotation"].get("screenshot_analysis_batch_size", 1),
                 "rewrite_screenshot_analysis_format_summary": config["annotation"].get(
-                    "rewrite_screenshot_analysis_format_summary", False
+                    "rewrite_screenshot_analysis_format_summary", True
                 ),
                 "rewrite_screenshot_analysis_prompt": config["annotation"].get(
                     "rewrite_screenshot_analysis_prompt", ""
                 ),
                 "screenshot_analysis_prompt": config["annotation"].get(
-                    "screenshot_analysis_prompt", "Summarize the type of task or activity shown in these images."
+                    "screenshot_analysis_prompt", ""
                 ),
                 "local_model": {
                     "provider": config["annotation"].get("local_model", {}).get("provider", "ollama"),
@@ -169,7 +169,7 @@ def get_config():
                 "digest_overall_prompt": config.get("digest", {}).get("digest_overall_prompt", ""),
                 "local_model": {
                     "provider": config.get("digest", {}).get("local_model", {}).get("provider", "ollama"),
-                    "model_name": config.get("digest", {}).get("local_model", {}).get("model_name", "qwen3-vl:8b"),
+                    "model_name": config.get("digest", {}).get("local_model", {}).get("model_name", "qwen3.5:4b"),
                     "timeout_sec": config.get("digest", {}).get("local_model", {}).get("timeout_sec", 300),
                     "keep_alive": config.get("digest", {}).get("local_model", {}).get("keep_alive", "1m"),
                 },

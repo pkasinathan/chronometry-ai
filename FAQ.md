@@ -27,13 +27,14 @@ Chronometry is a privacy-first activity tracker for macOS. It periodically captu
 - **Python 3.10-3.13** (pyobjc for menu bar/hotkey does not yet support Python 3.14+)
 - **Ollama** — local LLM runtime for AI annotation
 
-Install Ollama and pull the vision model:
+Install Ollama and pull the models:
 
 ```bash
 brew install ollama
 brew services start ollama   # runs as a background service, auto-starts at login
 ollama pull qwen3-vl:8b
 ollama pull qwen2.5vl:7b    # fallback model
+ollama pull qwen3.5:4b      # text model for digest + post-format
 ```
 
 ### How do I install Chronometry?
@@ -366,7 +367,7 @@ digest:
   local_model:
     provider: "ollama"
     base_url: "http://localhost:11434"
-    model_name: "qwen3-vl:8b"
+    model_name: "qwen3.5:4b"
     timeout_sec: 300
 ```
 
@@ -374,7 +375,7 @@ digest:
 
 1. Install: `brew install ollama`
 2. Start as a background service: `brew services start ollama` (auto-starts at login)
-3. Pull the models: `ollama pull qwen3-vl:8b && ollama pull qwen2.5vl:7b`
+3. Pull the models: `ollama pull qwen3-vl:8b && ollama pull qwen2.5vl:7b && ollama pull qwen3.5:4b`
 4. Verify: `chrono validate` checks that Ollama is reachable and models are available
 
 Chronometry will attempt to auto-start Ollama if it's installed but not running.
@@ -755,12 +756,13 @@ All defaults live in `system_config.yaml`. Add any of these to `user_config.yaml
 | **annotation.local_model** | `provider` | `"ollama"` | `"ollama"` or `"openai_compatible"` |
 | | `base_url` | `"http://localhost:11434"` | LLM server URL |
 | | `model_name` | `"qwen3-vl:8b"` | Primary model name |
+| | `fallback_model_name` | `"qwen2.5vl:7b"` | Fallback model name |
 | | `timeout_sec` | `300` | API call timeout |
 | **digest** | `temperature` | `0.7` | LLM temperature |
 | | `max_tokens_category` | `200` | Max tokens per category summary |
 | | `max_tokens_overall` | `300` | Max tokens for overall summary |
 | **digest.local_model** | `provider` | `"ollama"` | Text model provider |
-| | `model_name` | `"qwen3-vl:8b"` | Digest model name |
+| | `model_name` | `"qwen3.5:4b"` | Text model name (authoritative for digest/post-format calls) |
 | **timeline** | `gap_minutes` | `5` | Gap threshold for grouping activities |
 | **categories** | `focus` | *(list)* | Keywords for focus categories |
 | | `distraction` | *(list)* | Keywords for distraction categories |

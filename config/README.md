@@ -106,7 +106,7 @@ annotation:
 ```yaml
 digest:
   enabled: true
-  model: "qwen3-vl:8b"
+  model: "qwen3.5:4b"            # Legacy/display key (text model)
   temperature: 0.7
   interval_seconds: 3600
   max_tokens_default: 500
@@ -120,7 +120,7 @@ digest:
   local_model:
     provider: "ollama"
     base_url: "http://localhost:11434"
-    model_name: "qwen3-vl:8b"
+    model_name: "qwen3.5:4b"     # Authoritative key used for digest + post-format text calls
     timeout_sec: 300
 ```
 

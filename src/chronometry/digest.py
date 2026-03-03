@@ -16,6 +16,24 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
+def _get_min_activity_duration_minutes(config: dict) -> int:
+    """Derive a sensible minimum duration for point-in-time activities."""
+    capture_interval_seconds = config.get("capture", {}).get("capture_interval_seconds", 0)
+    if capture_interval_seconds and capture_interval_seconds > 0:
+        return max(1, int(round(capture_interval_seconds / 60)))
+    return 1
+
+
+def _calculate_activity_duration_minutes(activity: dict, min_duration_minutes: int) -> float:
+    """Calculate activity duration in minutes with fallback for zero-span activities."""
+    start = activity["start_time"]
+    end = activity["end_time"]
+    duration = (end - start).total_seconds() / 60
+    if duration <= 0:
+        return float(min_duration_minutes)
+    return duration
+
+
 def call_text_llm(prompt: str, config: dict, max_tokens: int = None, context: str = None) -> dict:
     """Call the configured text LLM for text generation.
 
@@ -39,14 +57,14 @@ def generate_category_summaries(activities: list[dict], config: dict) -> tuple[d
     category_activities = defaultdict(list)
     category_duration = defaultdict(int)
 
+    min_duration_minutes = _get_min_activity_duration_minutes(config)
+
     for activity in activities:
         category = activity["category"]
         category_activities[category].append(activity)
 
-        # Calculate duration
-        start = activity["start_time"]
-        end = activity["end_time"]
-        duration = (end - start).total_seconds() / 60
+        # Calculate duration with fallback for point-in-time captures
+        duration = _calculate_activity_duration_minutes(activity, min_duration_minutes)
         category_duration[category] += duration
 
     # Generate summary for each category
@@ -81,12 +99,25 @@ def generate_category_summaries(activities: list[dict], config: dict) -> tuple[d
         result = call_text_llm(prompt, config, max_tokens=max_tokens_category, context=f"Category: {category}")
         total_tokens += result["tokens"]
 
+        category_activities_detail = []
+        for activity in activities_list:
+            duration_minutes = int(round(_calculate_activity_duration_minutes(activity, min_duration_minutes)))
+            category_activities_detail.append(
+                {
+                    "summary": activity["summary"],
+                    "start_time": activity["start_time"].isoformat(),
+                    "end_time": activity["end_time"].isoformat(),
+                    "duration_minutes": duration_minutes,
+                }
+            )
+
         category_summaries[category] = {
             "summary": result["content"],
             "count": len(activities_list),
-            "duration_minutes": int(category_duration[category]),
+            "duration_minutes": int(round(category_duration[category])),
             "icon": activities_list[0]["icon"],
             "color": activities_list[0]["color"],
+            "activities": category_activities_detail,
         }
 
     return category_summaries, total_tokens

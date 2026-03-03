@@ -101,6 +101,24 @@ class TestDataEndpoints:
         assert "local_model" in data["annotation"]
         assert "local_model" in data["digest"]
 
+    def test_get_config_uses_current_annotation_fallbacks(self, client):
+        """Fallbacks should match current defaults for annotation fields."""
+        minimal_config = {
+            "capture": {"capture_interval_seconds": 900, "monitor_index": 0, "retention_days": 30},
+            "annotation": {},
+            "timeline": {"bucket_minutes": 15},
+            "digest": {"local_model": {}},
+            "notifications": {},
+        }
+        with patch("chronometry.web_server.config", minimal_config):
+            response = client.get("/api/config")
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["annotation"]["annotation_mode"] == "manual"
+        assert data["annotation"]["rewrite_screenshot_analysis_format_summary"] is True
+        assert data["annotation"]["screenshot_analysis_prompt"] == ""
+
     @patch("chronometry.web_server.load_annotations")
     @patch("chronometry.web_server.group_activities")
     @patch("chronometry.web_server.calculate_stats")
@@ -549,7 +567,7 @@ class TestConfigurationUpdate:
                             "keep_alive": "1m",
                         }
                     },
-                    "digest": {"local_model": {"provider": "ollama", "model_name": "qwen3-vl:8b", "timeout_sec": 300}},
+                    "digest": {"local_model": {"provider": "ollama", "model_name": "qwen3.5:4b", "timeout_sec": 300}},
                 },
                 sort_keys=False,
             )
@@ -574,7 +592,7 @@ class TestConfigurationUpdate:
         assert updated["annotation"]["local_model"]["model_name"] == "qwen3-vl:8b"
         assert updated["annotation"]["local_model"]["fallback_model_name"] == "qwen2.5vl:7b"
         assert updated["digest"]["local_model"]["keep_alive"] == "10m"
-        assert updated["digest"]["local_model"]["model_name"] == "qwen3-vl:8b"
+        assert updated["digest"]["local_model"]["model_name"] == "qwen3.5:4b"
         mock_backup.assert_called_once_with(config_file)
         mock_init.assert_called_once()
 

@@ -157,7 +157,7 @@ if __name__ == "__main__":
 
 Defined in `conftest.py`:
 
-- **`sample_config`** — Returns a dict with full config including `model_name: "qwen3-vl:8b"`, annotation/digest backends, capture settings, timeline, notifications, and categories. Uses `tmp_path` for `root_dir`.
+- **`sample_config`** — Returns a dict with full config including annotation vision model `qwen3-vl:8b` and digest/text model settings, plus capture/timeline/notifications/categories. Uses `tmp_path` for `root_dir`.
 - **`isolate_chronometry_home`** (autouse) — Redirects `CHRONOMETRY_HOME` to `tmp_path/.chronometry` so tests never touch the real `~/.chronometry` directory.
 
 The project uses a two-file config system:

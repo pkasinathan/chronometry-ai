@@ -21,7 +21,7 @@
     <style>
         /* ── Global Font Scale (sentinel-ui convention) ── */
         :root {
-            --pico-font-size: 87.5%;
+            --pico-font-size: 100%;
             --bg-body: #11191f;
             --bg-card: #1a2028;
             --bg-input: #0d1117;
@@ -481,6 +481,7 @@
             background: var(--bg-subtle);
             margin-bottom: 0.5rem;
             transition: background 0.15s;
+            cursor: pointer;
         }
         
         .digest-category-card:hover {
@@ -514,6 +515,115 @@
             font-size: 0.82rem;
             line-height: 1.6;
             color: var(--text-muted);
+            text-align: left;
+        }
+
+        .digest-category-summary,
+        .digest-category-summary p {
+            text-align: left !important;
+        }
+
+        [data-theme="light"] .digest-category-summary,
+        [data-theme="light"] .digest-category-summary p {
+            color: #111827 !important;
+        }
+
+        [data-theme="dark"] .digest-category-summary,
+        [data-theme="dark"] .digest-category-summary p {
+            color: #d1d5db !important;
+        }
+
+        .digest-category-header {
+            justify-content: space-between;
+        }
+
+        .digest-category-header-left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            min-width: 0;
+        }
+
+        .digest-category-chevron {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            transition: transform 0.15s ease;
+            transform: rotate(0deg);
+        }
+
+        .digest-category-chevron.expanded {
+            transform: rotate(180deg);
+        }
+
+        .digest-category-details {
+            margin-top: 0.6rem;
+            border-top: 1px solid var(--border-subtle);
+            padding-top: 0.6rem;
+        }
+
+        .digest-category-activity {
+            display: grid;
+            grid-template-columns: 140px 1fr 44px;
+            column-gap: 0.7rem;
+            align-items: start;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 0.45rem;
+        }
+
+        .digest-category-activity:first-child {
+            margin-top: 0;
+        }
+
+        .digest-category-activity-time {
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+            color: var(--text-muted);
+            padding-top: 0.05rem;
+        }
+
+        .digest-category-activity-duration {
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+            text-align: right;
+            color: var(--text-muted);
+            padding-top: 0.05rem;
+        }
+
+        .digest-category-activity-summary {
+            line-height: 1.45;
+            color: #111827 !important;
+            word-break: break-word;
+            min-width: 0;
+            text-align: left;
+            justify-self: start;
+        }
+
+        [data-theme="light"] .digest-category-activity-summary {
+            color: #111827 !important;
+        }
+
+        [data-theme="dark"] .digest-category-activity-summary {
+            color: #e5e7eb !important;
+        }
+
+        @media (max-width: 900px) {
+            .digest-category-activity {
+                grid-template-columns: 1fr auto;
+                row-gap: 0.15rem;
+            }
+
+            .digest-category-activity-time {
+                grid-column: 1 / 2;
+            }
+
+            .digest-category-activity-duration {
+                grid-column: 2 / 3;
+            }
+
+            .digest-category-activity-summary {
+                grid-column: 1 / 3;
+            }
         }
 
         /* ── Charts ── */
@@ -950,16 +1060,37 @@
                         
                         <div v-for="(data, category) in digest.category_summaries" :key="category"
                                      class="digest-category-card"
-                             :style="{ borderLeftColor: data.color || 'var(--accent-interactive)' }">
-                                        <span class="digest-category-icon">[[ data.icon ]]</span>
+                             :style="{ borderLeftColor: data.color || 'var(--accent-interactive)' }"
+                             role="button"
+                             tabindex="0"
+                             @click="toggleDigestCategoryExpand(category)"
+                             @keydown.enter.prevent="toggleDigestCategoryExpand(category)"
+                             @keydown.space.prevent="toggleDigestCategoryExpand(category)">
+                            <span class="digest-category-icon">[[ data.icon ]]</span>
                             <div class="digest-category-body">
                                 <div class="digest-category-header">
+                                    <div class="digest-category-header-left">
                                         <span class="digest-category-name">[[ category ]]</span>
                                         <span class="digest-category-stats">
                                             [[ data.count ]] activities · [[ formatDuration(data.duration_minutes) ]]
                                         </span>
                                     </div>
+                                    <span class="digest-category-chevron"
+                                          :class="{ expanded: expandedDigestCategory === category }">▾</span>
+                                </div>
                                 <div class="digest-category-summary md-content" v-html="renderMarkdown(data.summary)"></div>
+                                <div v-if="expandedDigestCategory === category" class="digest-category-details" @click.stop>
+                                    <div v-if="data.activities && data.activities.length">
+                                        <div class="digest-category-activity"
+                                             v-for="(activity, idx) in data.activities"
+                                             :key="`${category}-${idx}-${activity.start_time}`">
+                                            <div class="digest-category-activity-time">[[ formatTime(activity.start_time) ]] - [[ formatTime(activity.end_time) ]]</div>
+                                            <div class="digest-category-activity-summary">[[ formatDigestActivitySummary(activity.summary) ]]</div>
+                                            <div class="digest-category-activity-duration">[[ formatDuration(activity.duration_minutes) ]]</div>
+                                        </div>
+                                    </div>
+                                    <div v-else class="digest-category-activity">No activity details available.</div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1383,7 +1514,8 @@
                                 </div>
                                 <div class="settings-field">
                                     <label>Model Name</label>
-                                    <input type="text" v-model="settings.digest.local_model.model_name" placeholder="qwen3-vl:8b">
+                                    <input type="text" v-model="settings.digest.local_model.model_name" placeholder="qwen3.5:4b">
+                                    <div class="settings-hint">Used for digest text generation and post-annotation summary formatting.</div>
                                 </div>
                                 <div class="settings-field">
                                     <label>Timeout (seconds)</label>
@@ -1473,7 +1605,7 @@
                             digest_overall_prompt: '',
                             local_model: {
                                 provider: 'ollama',
-                                model_name: 'qwen3-vl:8b',
+                                model_name: 'qwen3.5:4b',
                                 timeout_sec: 300,
                                 keep_alive: '1m'
                             }
@@ -1488,7 +1620,8 @@
                     searchTimeout: null,
                     expandedActivity: null,
                     activityFrames: [],
-                    loadingFrames: false
+                    loadingFrames: false,
+                    expandedDigestCategory: null
                 };
             },
             mounted() {
@@ -1549,10 +1682,30 @@
                     try {
                         const url = force ? `/api/digest/${this.digestDate}?force=true` : `/api/digest/${this.digestDate}`;
                         this.digest = await (await fetch(url)).json();
+                        if (!this.digest?.category_summaries || !(this.expandedDigestCategory in this.digest.category_summaries)) {
+                            this.expandedDigestCategory = null;
+                        }
                     } catch(e) { this.digest = { error: 'Failed to load digest' }; }
                     finally { this.loadingDigest = false; }
                 },
                 async regenerateDigest() { await this.loadDigest(true); this.showToast('Digest regenerated'); },
+                toggleDigestCategoryExpand(category) {
+                    this.expandedDigestCategory = this.expandedDigestCategory === category ? null : category;
+                },
+                formatDigestActivitySummary(summary) {
+                    if (!summary) return '';
+                    const lines = String(summary)
+                        .replace(/\*\*/g, '')
+                        .replace(/\r/g, '')
+                        .split('\n')
+                        .map(l => l.trim())
+                        .filter(Boolean)
+                        .map(l => l.replace(/^[-*]\s+/, ''))
+                        .map(l => l.replace(/^(Title \(12 words max\)|Activity|Artifacts|Status\/Next|Category|Confidence)\s*:\s*/i, ''))
+                        .filter(Boolean);
+                    const condensed = lines.join(' ').replace(/\s+/g, ' ').trim();
+                    return condensed.length > 260 ? `${condensed.slice(0, 257)}...` : condensed;
+                },
                 startAnnotationPolling() {
                     if (this._annotationPoll) return;
                     this._annotationPoll = setInterval(async () => {

@@ -18,6 +18,7 @@ brew services start ollama
 # Pull the models
 ollama pull qwen3-vl:8b
 ollama pull qwen2.5vl:7b    # fallback model
+ollama pull qwen3.5:4b      # text model (digest + post-format)
 ```
 
 ## 3. Initialize

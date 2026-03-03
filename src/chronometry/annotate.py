@@ -158,7 +158,7 @@ def format_summary_with_llm(raw_summary: str, config: dict, batch_size: int) -> 
         batch_size: Number of frames in the batch (for context logging)
 
     Returns:
-        Tuple of (formatted_summary, tokens_used)
+        Tuple of (formatted_summary, tokens_used, was_formatted)
     """
     annotation_config = config["annotation"]
     format_prompt_template = annotation_config.get("rewrite_screenshot_analysis_prompt", "")
@@ -185,8 +185,10 @@ def format_summary_with_llm(raw_summary: str, config: dict, batch_size: int) -> 
             prompt=formatting_prompt, config=config, max_tokens=1000, context=f"Formatting {batch_size} frame batch"
         )
 
-        formatted_summary = result.get("content") or raw_summary
+        model_content = result.get("content")
+        formatted_summary = model_content or raw_summary
         tokens_used = result.get("tokens", 0)
+        was_formatted = bool(model_content)
 
         try:
             if tokens_used > 0:
@@ -202,16 +204,20 @@ def format_summary_with_llm(raw_summary: str, config: dict, batch_size: int) -> 
             logger.warning(f"Token tracking failed (summary preserved): {e}")
 
         logger.info(f"Summary formatted successfully (used {tokens_used} tokens)")
-        return formatted_summary, tokens_used
+        return formatted_summary, tokens_used, was_formatted
 
     except Exception as e:
         logger.error(f"Error formatting summary: {e}")
         logger.warning("Falling back to raw summary")
-        return raw_summary, 0
+        return raw_summary, 0, False
 
 
-def process_batch(image_paths: list[Path], config: dict):
-    """Process a batch of images through the API with retry logic."""
+def process_batch(image_paths: list[Path], config: dict) -> list[Path]:
+    """Process a batch of images through the vision API and save raw summaries.
+
+    Returns:
+        List of JSON paths that were saved successfully.
+    """
     from chronometry.runtime_stats import stats
 
     annotation_config = config["annotation"]
@@ -242,7 +248,7 @@ def process_batch(image_paths: list[Path], config: dict):
         logger.error("No images to process in batch")
         stats.record("annotation.frames_attempted", len(image_paths))
         stats.record("annotation.frames_failed", len(image_paths))
-        return
+        return []
 
     # V2: Build prompt with metadata and recent context
     first_image = image_paths[0]
@@ -263,6 +269,7 @@ def process_batch(image_paths: list[Path], config: dict):
         stats.record("annotation.frames_failed", preprocessed_failed)
 
     saved_count = 0
+    saved_json_paths: list[Path] = []
     try:
         logger.info(f"Calling vision API with {len(images)} images...")
         result = call_vision_api_with_retry(images, config, prompt_override=prompt_override)
@@ -272,23 +279,10 @@ def process_batch(image_paths: list[Path], config: dict):
             logger.warning(f"Skipping annotation for {remaining} frames — all models failed")
             if remaining > 0:
                 stats.record("annotation.frames_failed", remaining)
-            return
+            return []
 
-        # Get the raw summary
+        # Save raw summary; formatting happens in a second pass.
         raw_summary = result.get("summary", "")
-
-        # Optionally format the summary with LLM
-        format_enabled = annotation_config.get("rewrite_screenshot_analysis_format_summary", False)
-        if format_enabled and raw_summary:
-            logger.info("Post-processing summary for better formatting...")
-            formatted_summary, _tokens_used = format_summary_with_llm(
-                raw_summary=raw_summary, config=config, batch_size=len(image_paths)
-            )
-            summary_to_save = formatted_summary
-        else:
-            if not format_enabled:
-                logger.info("Summary formatting disabled in config")
-            summary_to_save = raw_summary
 
         for image_path in successful_image_paths:
             json_path = get_json_path(image_path, json_suffix)
@@ -308,7 +302,9 @@ def process_batch(image_paths: list[Path], config: dict):
                 "image_file": image_path.name,
                 "inference_image": inference_jpg.name if inference_jpg.exists() else None,
                 "metadata": frame_metadata,
-                "summary": summary_to_save,
+                "summary": raw_summary,
+                "summary_raw": raw_summary,
+                "summary_formatted": False,
                 "sources": result.get("sources", []),
                 "batch_size": len(image_paths),
             }
@@ -316,14 +312,102 @@ def process_batch(image_paths: list[Path], config: dict):
             save_json(json_path, json_data)
             logger.info(f"Saved annotation: {json_path.name}")
             saved_count += 1
+            saved_json_paths.append(json_path)
 
         stats.record("annotation.frames_succeeded", saved_count)
+        return saved_json_paths
 
     except Exception as e:
         logger.error(f"Error processing batch: {e}", exc_info=True)
         remaining = len(successful_image_paths) - saved_count
         if remaining > 0:
             stats.record("annotation.frames_failed", remaining)
+        return []
+
+
+def _collect_unformatted_annotation_jsons(
+    root_dir: str, date: datetime, json_suffix: str = ".json"
+) -> list[Path]:
+    """Collect existing annotation JSON files that still need formatting.
+
+    Scans yesterday and today directories and returns JSON files where
+    `summary_formatted` is not true and a summary is present.
+    """
+    dirs_to_check = []
+
+    yesterday = date - timedelta(days=1)
+    yesterday_dir = get_daily_dir(root_dir, yesterday)
+    if yesterday_dir.exists():
+        dirs_to_check.append(yesterday_dir)
+
+    daily_dir = get_daily_dir(root_dir, date)
+    if daily_dir.exists():
+        dirs_to_check.append(daily_dir)
+
+    unformatted: list[Path] = []
+    for check_dir in dirs_to_check:
+        for json_path in sorted(f for f in check_dir.glob(f"*{json_suffix}") if not f.stem.endswith("_meta")):
+            try:
+                data = load_json(json_path)
+            except Exception:
+                # Invalid/corrupt annotation files should be ignored here; they are
+                # treated as already-annotated for capture purposes.
+                continue
+
+            if data.get("summary_formatted") is True:
+                continue
+
+            if not (data.get("summary_raw") or data.get("summary")):
+                continue
+
+            unformatted.append(json_path)
+
+    return unformatted
+
+
+def post_format_annotations(json_paths: list[Path], config: dict) -> int:
+    """Apply text formatting to raw summaries for newly annotated JSON files.
+
+    Returns:
+        Count of summaries successfully formatted.
+    """
+    if not json_paths:
+        return 0
+
+    digest_model = config.get("digest", {}).get("local_model", {}).get("model_name", "")
+    formatted_count = 0
+
+    for json_path in json_paths:
+        try:
+            data = load_json(json_path)
+        except Exception as e:
+            logger.warning(f"Skipping formatting for unreadable annotation {json_path.name}: {e}")
+            continue
+
+        if data.get("summary_formatted"):
+            continue
+
+        raw_summary = data.get("summary_raw") or data.get("summary", "")
+        if not raw_summary:
+            continue
+
+        formatted_summary, _tokens_used, was_formatted = format_summary_with_llm(
+            raw_summary=raw_summary,
+            config=config,
+            batch_size=int(data.get("batch_size", 1) or 1),
+        )
+
+        data["summary"] = formatted_summary
+        data["summary_raw"] = raw_summary
+        data["summary_formatted"] = bool(was_formatted)
+        if was_formatted and digest_model:
+            data["summary_format_model"] = digest_model
+
+        save_json(json_path, data)
+        if was_formatted:
+            formatted_count += 1
+
+    return formatted_count
 
 
 def annotate_frames(config: dict, date: datetime = None) -> int:
@@ -333,7 +417,7 @@ def annotate_frames(config: dict, date: datetime = None) -> int:
     edge case where frames captured near midnight don't reach batch_size threshold.
 
     Returns:
-        Number of frames that were annotated (0 if waiting for batch_size)
+        Number of frames successfully saved during the vision pass.
     """
     from chronometry.runtime_stats import stats
 
@@ -395,15 +479,33 @@ def annotate_frames(config: dict, date: datetime = None) -> int:
     logger.info(f"Found {len(unannotated)} total unannotated frames, processing in batches of {batch_size}")
     stats.record("annotation.runs")
 
-    # Process in batches
+    # Process in batches (vision pass)
+    saved_json_paths: list[Path] = []
     total_batches = (len(unannotated) + batch_size - 1) // batch_size
     for i in range(0, len(unannotated), batch_size):
         batch = unannotated[i : i + batch_size]
         batch_num = i // batch_size + 1
         logger.info(f"Processing batch {batch_num}/{total_batches}")
-        process_batch(batch, config)
+        saved_json_paths.extend(process_batch(batch, config) or [])
 
-    return len(unannotated)
+    vision_saved_count = len(saved_json_paths)
+
+    # Optional second pass: format raw summaries with text model.
+    format_enabled = annotation_config.get("rewrite_screenshot_analysis_format_summary", False)
+    if format_enabled:
+        # Recoverability: include existing unformatted annotations from checked
+        # directories, not only current-run saves.
+        existing_unformatted = _collect_unformatted_annotation_jsons(
+            root_dir=root_dir, date=date, json_suffix=json_suffix
+        )
+        format_targets = sorted({*saved_json_paths, *existing_unformatted})
+        logger.info(f"Post-formatting {len(format_targets)} annotation summaries...")
+        formatted = post_format_annotations(format_targets, config)
+        logger.info(f"Post-formatting complete: {formatted}/{len(format_targets)} summaries formatted")
+    else:
+        logger.info("Summary formatting disabled in config")
+
+    return vision_saved_count
 
 
 def main():

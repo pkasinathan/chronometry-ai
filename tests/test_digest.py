@@ -92,7 +92,7 @@ class TestTextAPI:
         test_config["digest"]["local_model"] = {
             "provider": "ollama",
             "base_url": "http://localhost:11434",
-            "model_name": "qwen3-vl:8b",
+            "model_name": "qwen3.5:4b",
             "timeout_sec": 120,
         }
 
@@ -169,6 +169,8 @@ class TestCategorySummaries:
         assert summaries["Code"]["duration_minutes"] == 60  # 30 + 30 minutes
         assert summaries["Code"]["icon"] == "💻"
         assert summaries["Code"]["color"] == "#E50914"
+        assert len(summaries["Code"]["activities"]) == 2
+        assert summaries["Code"]["activities"][0]["summary"] == "Working on Python code"
 
         # Verify Email category summary
         assert summaries["Email"]["count"] == 1
@@ -276,6 +278,51 @@ class TestCategorySummaries:
         assert summaries == {}
         assert total_tokens == 0
         mock_api.assert_not_called()
+
+    @patch("chronometry.digest.call_text_llm")
+    def test_category_summaries_applies_fallback_duration_for_zero_span(self, mock_api, test_config):
+        """Zero-span activities should use capture interval as fallback duration."""
+        test_config["capture"] = {"capture_interval_seconds": 900}
+        activities = [
+            {
+                "category": "Code",
+                "icon": "💻",
+                "color": "#E50914",
+                "summary": "Single snapshot coding task",
+                "start_time": datetime(2025, 11, 1, 10, 0),
+                "end_time": datetime(2025, 11, 1, 10, 0),
+            }
+        ]
+        mock_api.return_value = {"content": "Summary", "tokens": 20, "prompt_tokens": 10, "completion_tokens": 10}
+
+        summaries, _ = generate_category_summaries(activities, test_config)
+
+        assert summaries["Code"]["duration_minutes"] == 15
+        assert summaries["Code"]["activities"][0]["duration_minutes"] == 15
+
+    @patch("chronometry.digest.call_text_llm")
+    def test_category_summaries_includes_activity_detail_payload(self, mock_api, test_config):
+        """Category summaries should include detail records for UI expansion."""
+        activities = [
+            {
+                "category": "Meeting",
+                "icon": "📞",
+                "color": "#E50914",
+                "summary": "Sprint planning discussion",
+                "start_time": datetime(2025, 11, 1, 14, 0),
+                "end_time": datetime(2025, 11, 1, 14, 30),
+            }
+        ]
+        mock_api.return_value = {"content": "Summary", "tokens": 20, "prompt_tokens": 10, "completion_tokens": 10}
+
+        summaries, _ = generate_category_summaries(activities, test_config)
+        details = summaries["Meeting"]["activities"]
+
+        assert len(details) == 1
+        assert details[0]["summary"] == "Sprint planning discussion"
+        assert details[0]["start_time"] == "2025-11-01T14:00:00"
+        assert details[0]["end_time"] == "2025-11-01T14:30:00"
+        assert details[0]["duration_minutes"] == 30
 
 
 class TestOverallSummary:

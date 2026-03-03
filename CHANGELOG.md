@@ -4,6 +4,17 @@ All notable changes to Chronometry will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.21] - 2026-03-03
+
+### Changed
+- Refined digest dashboard presentation and model guidance to reflect the split between vision annotation (`qwen3-vl:8b` with `qwen2.5vl:7b` fallback) and text generation (`qwen3.5:4b`).
+- Aligned API/config fallbacks and validation semantics with current defaults, including annotation prompt behavior and `screenshot_analysis_batch_size`.
+
+### Fixed
+- Made two-phase annotation post-formatting retryable for previously unformatted annotations so transient failures can recover on later runs.
+- Corrected annotation success reporting to return actual vision-save count, ensuring web and menubar notifications reflect real completed work.
+- Resolved digest category duration zero-floor behavior and expanded-category detail handling regressions covered by updated tests.
+
 ## [1.0.20] - 2026-03-02
 
 ### Added

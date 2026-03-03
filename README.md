@@ -94,6 +94,7 @@ brew services start ollama
 # Pull the models
 ollama pull qwen3-vl:8b
 ollama pull qwen2.5vl:7b    # fallback model
+ollama pull qwen3.5:4b      # text model (digest + post-format)
 ```
 
 ### Install
@@ -245,7 +246,8 @@ Chronometry supports two local backends:
 
 Configured in `system_config.yaml` under `annotation.local_model` and `digest.local_model`.
 
-Default primary model: `qwen3-vl:8b`. Fallback: `qwen2.5vl:7b`.
+Default vision model: `qwen3-vl:8b` (fallback `qwen2.5vl:7b`).
+Default text model: `qwen3.5:4b` (digest and post-annotation formatting).
 
 ### Environment Variables
 
