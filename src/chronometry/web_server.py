@@ -144,9 +144,7 @@ def get_config():
                 "rewrite_screenshot_analysis_prompt": config["annotation"].get(
                     "rewrite_screenshot_analysis_prompt", ""
                 ),
-                "screenshot_analysis_prompt": config["annotation"].get(
-                    "screenshot_analysis_prompt", ""
-                ),
+                "screenshot_analysis_prompt": config["annotation"].get("screenshot_analysis_prompt", ""),
                 "local_model": {
                     "provider": config["annotation"].get("local_model", {}).get("provider", "ollama"),
                     "model_name": config["annotation"].get("local_model", {}).get("model_name", "qwen3-vl:8b"),

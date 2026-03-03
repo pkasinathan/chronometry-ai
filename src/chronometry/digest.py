@@ -20,7 +20,7 @@ def _get_min_activity_duration_minutes(config: dict) -> int:
     """Derive a sensible minimum duration for point-in-time activities."""
     capture_interval_seconds = config.get("capture", {}).get("capture_interval_seconds", 0)
     if capture_interval_seconds and capture_interval_seconds > 0:
-        return max(1, int(round(capture_interval_seconds / 60)))
+        return max(1, round(capture_interval_seconds / 60))
     return 1
 
 
@@ -101,7 +101,7 @@ def generate_category_summaries(activities: list[dict], config: dict) -> tuple[d
 
         category_activities_detail = []
         for activity in activities_list:
-            duration_minutes = int(round(_calculate_activity_duration_minutes(activity, min_duration_minutes)))
+            duration_minutes = round(_calculate_activity_duration_minutes(activity, min_duration_minutes))
             category_activities_detail.append(
                 {
                     "summary": activity["summary"],
@@ -114,7 +114,7 @@ def generate_category_summaries(activities: list[dict], config: dict) -> tuple[d
         category_summaries[category] = {
             "summary": result["content"],
             "count": len(activities_list),
-            "duration_minutes": int(round(category_duration[category])),
+            "duration_minutes": round(category_duration[category]),
             "icon": activities_list[0]["icon"],
             "color": activities_list[0]["color"],
             "activities": category_activities_detail,

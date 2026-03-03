@@ -325,9 +325,7 @@ def process_batch(image_paths: list[Path], config: dict) -> list[Path]:
         return []
 
 
-def _collect_unformatted_annotation_jsons(
-    root_dir: str, date: datetime, json_suffix: str = ".json"
-) -> list[Path]:
+def _collect_unformatted_annotation_jsons(root_dir: str, date: datetime, json_suffix: str = ".json") -> list[Path]:
     """Collect existing annotation JSON files that still need formatting.
 
     Scans yesterday and today directories and returns JSON files where

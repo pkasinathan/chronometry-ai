@@ -575,7 +575,14 @@ class TestFrameAnnotation:
     @patch("chronometry.annotate.get_json_path")
     @patch("chronometry.annotate.get_daily_dir")
     def test_annotate_frames_runs_text_pass_after_vision(
-        self, mock_daily_dir, mock_json_path, mock_process, mock_post_format, mock_collect_unformatted, test_config, tmp_path
+        self,
+        mock_daily_dir,
+        mock_json_path,
+        mock_process,
+        mock_post_format,
+        mock_collect_unformatted,
+        test_config,
+        tmp_path,
     ):
         """Vision pass should complete before post-format pass runs."""
         daily_dir = tmp_path / "frames" / "2025-11-01"
@@ -622,7 +629,14 @@ class TestFrameAnnotation:
     @patch("chronometry.annotate.get_json_path")
     @patch("chronometry.annotate.get_daily_dir")
     def test_annotate_frames_retries_existing_unformatted_on_rerun(
-        self, mock_daily_dir, mock_json_path, mock_process, mock_post_format, mock_collect_unformatted, test_config, tmp_path
+        self,
+        mock_daily_dir,
+        mock_json_path,
+        mock_process,
+        mock_post_format,
+        mock_collect_unformatted,
+        test_config,
+        tmp_path,
     ):
         """Formatting pass should include pre-existing unformatted annotations."""
         daily_dir = tmp_path / "frames" / "2025-11-01"
