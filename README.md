@@ -4,6 +4,7 @@
 
 [![CI](https://github.com/pkasinathan/chronometry-ai/actions/workflows/ci.yml/badge.svg)](https://github.com/pkasinathan/chronometry-ai/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/chronometry-ai)](https://pypi.org/project/chronometry-ai/)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/chronometry-ai?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/chronometry-ai)
 [![Python](https://img.shields.io/pypi/pyversions/chronometry-ai)](https://pypi.org/project/chronometry-ai/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
