@@ -4,6 +4,11 @@ All notable changes to Chronometry will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.23] - 2026-03-03
+
+### Fixed
+- Corrected all project URLs in PyPI metadata to point to `chronometry-ai` repo (was missing `-ai` suffix)
+
 ## [1.0.22] - 2026-03-03
 
 ### Added

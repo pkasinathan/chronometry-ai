@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "chronometry-ai"
-version = "1.0.22"
+version = "1.0.23"
 description = "Privacy-first activity tracker with AI-powered annotation and timeline generation"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -57,11 +57,11 @@ chrono-menubar = "chronometry.menubar_app:main"
 chrono-capture = "chronometry.capture:main"
 
 [project.urls]
-Homepage = "https://github.com/pkasinathan/chronometry"
-Documentation = "https://github.com/pkasinathan/chronometry#readme"
-Repository = "https://github.com/pkasinathan/chronometry"
-Issues = "https://github.com/pkasinathan/chronometry/issues"
-Changelog = "https://github.com/pkasinathan/chronometry/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/pkasinathan/chronometry-ai"
+Documentation = "https://github.com/pkasinathan/chronometry-ai#readme"
+Repository = "https://github.com/pkasinathan/chronometry-ai"
+Issues = "https://github.com/pkasinathan/chronometry-ai/issues"
+Changelog = "https://github.com/pkasinathan/chronometry-ai/blob/main/CHANGELOG.md"
 
 # ── Setuptools ────────────────────────────────────────────────────────────────
 
