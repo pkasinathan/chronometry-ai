@@ -71,48 +71,59 @@ def is_screen_locked() -> bool:
     3. ScreenSaverEngine process check
     4. Laptop lid state check (AppleClamshellState)
 
+    Fail-closed: if every method errors, assumes locked to protect privacy.
+
     Returns:
         True if screen is locked or lid is closed, False otherwise
     """
+    methods_attempted = 0
+    methods_errored = 0
+
     try:
         # Method 1: Use Python's Quartz to check session state (most reliable for screen lock)
         try:
+            methods_attempted += 1
             from Quartz import CGSessionCopyCurrentDictionary
 
             session_dict = CGSessionCopyCurrentDictionary()
             if session_dict:
-                # When locked, CGSSessionScreenIsLocked key is present and True
                 if session_dict.get("CGSSessionScreenIsLocked"):
                     logger.debug("Screen locked detected via CGSession")
                     return True
         except ImportError:
             logger.debug("Quartz framework not available, trying alternative methods")
+            methods_errored += 1
         except Exception as e:
             logger.debug(f"CGSession check failed: {e}")
+            methods_errored += 1
 
         # Method 2: Check if loginwindow owns the console (indicates screen is locked)
         try:
+            methods_attempted += 1
             result = subprocess.run(["stat", "-f", "%Su", "/dev/console"], capture_output=True, text=True, timeout=1)
             if result.returncode == 0:
                 console_owner = result.stdout.strip()
                 if console_owner == "root":
-                    # When locked, console owner is root (loginwindow process)
                     logger.debug("Screen locked detected via console owner")
                     return True
         except Exception as e:
             logger.debug(f"Console owner check failed: {e}")
+            methods_errored += 1
 
         # Method 3: Check if screensaver is running
         try:
+            methods_attempted += 1
             result = subprocess.run(["pgrep", "-x", "ScreenSaverEngine"], capture_output=True, timeout=1)
             if result.returncode == 0:
                 logger.debug("Screen locked detected via ScreenSaverEngine")
                 return True
         except Exception as e:
             logger.debug(f"ScreenSaverEngine check failed: {e}")
+            methods_errored += 1
 
         # Method 4: Check if laptop lid is closed (AppleClamshellState)
         try:
+            methods_attempted += 1
             result = subprocess.run(
                 ["ioreg", "-r", "-k", "AppleClamshellState", "-d", "4"], capture_output=True, text=True, timeout=2
             )
@@ -122,13 +133,17 @@ def is_screen_locked() -> bool:
                     return True
         except Exception as e:
             logger.debug(f"Clamshell state check failed: {e}")
+            methods_errored += 1
+
+        if methods_attempted > 0 and methods_errored == methods_attempted:
+            logger.warning("All screen lock detection methods failed — assuming locked for safety")
+            return True
 
         return False
 
     except Exception as e:
-        logger.debug(f"Screen lock detection failed: {e}")
-        # Fail-safe: assume unlocked to avoid blocking legitimate captures
-        return False
+        logger.warning(f"Screen lock detection failed — assuming locked for safety: {e}")
+        return True
 
 
 def create_synthetic_annotation(root_dir: str, timestamp: datetime, reason: str, summary: str):
@@ -225,9 +240,8 @@ def is_camera_in_use() -> bool:
         return False
 
     except Exception as e:
-        logger.debug(f"Camera detection failed: {e}")
-        # If we can't determine, assume camera is NOT in use
-        return False
+        logger.warning(f"Camera detection failed — assuming in use for safety: {e}")
+        return True
 
 
 def capture_region_interactive(config: dict, show_notifications: bool = True) -> bool:

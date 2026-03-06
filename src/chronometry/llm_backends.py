@@ -13,12 +13,31 @@ import shutil
 import subprocess
 import threading
 import time
+from urllib.parse import urlparse
 
 import requests
 
 from chronometry.token_usage import TokenUsageTracker
 
 logger = logging.getLogger(__name__)
+
+_LOCALHOST_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0"})
+
+
+def _validate_base_url(base_url: str) -> str:
+    """Warn if base_url points outside localhost (potential data exfiltration)."""
+    try:
+        parsed = urlparse(base_url)
+        host = (parsed.hostname or "").lower()
+        if host and host not in _LOCALHOST_HOSTS and not host.startswith("192.168.") and not host.startswith("10."):
+            logger.warning(
+                "LLM base_url %s points to a non-local host — prompts and images will be sent over the network. "
+                "Set annotation.local_model.base_url or digest.local_model.base_url to localhost if unintended.",
+                base_url,
+            )
+    except Exception:
+        pass
+    return base_url
 
 _inference_lock = threading.Lock()
 
@@ -197,7 +216,7 @@ def call_ollama_vision(
         images = images[:1]
 
     local_config = config["annotation"].get("local_model", {})
-    base_url = local_config.get("base_url", "http://localhost:11434")
+    base_url = _validate_base_url(local_config.get("base_url", "http://localhost:11434"))
     model_name = model_override or local_config.get("model_name", "qwen3-vl:8b")
     timeout = local_config.get("timeout_sec", 300)
     keep_alive = local_config.get("keep_alive", "1m")
@@ -259,7 +278,7 @@ def call_ollama_text(
     # Text calls are currently configured via digest.local_model and reused
     # for digest generation and annotation summary formatting.
     local_config = config.get("digest", {}).get("local_model", {})
-    base_url = local_config.get("base_url", "http://localhost:11434")
+    base_url = _validate_base_url(local_config.get("base_url", "http://localhost:11434"))
     model_name = local_config.get("model_name", "qwen3.5:4b")
     timeout = local_config.get("timeout_sec", 300)
     keep_alive = local_config.get("keep_alive", "1m")
@@ -350,7 +369,7 @@ def call_openai_vision(
         images = images[:1]
 
     local_config = config["annotation"].get("local_model", {})
-    base_url = local_config.get("base_url", "http://localhost:8000")
+    base_url = _validate_base_url(local_config.get("base_url", "http://localhost:8000"))
     model_name = model_override or local_config.get("model_name", "Qwen/Qwen3-VL-8B-Instruct")
     timeout = local_config.get("timeout_sec", 300)
 
@@ -406,7 +425,7 @@ def call_openai_text(
         {"content": str, "tokens": int, "prompt_tokens": int, "completion_tokens": int}
     """
     local_config = config.get("digest", {}).get("local_model", {})
-    base_url = local_config.get("base_url", "http://localhost:8000")
+    base_url = _validate_base_url(local_config.get("base_url", "http://localhost:8000"))
     model_name = local_config.get("model_name", "Qwen/Qwen3-8B-Instruct")
     timeout = local_config.get("timeout_sec", 300)
 

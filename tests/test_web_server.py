@@ -13,12 +13,20 @@ import yaml
 from chronometry.web_server import app, init_config
 
 
+@pytest.fixture(autouse=True)
+def _disable_auth():
+    """Disable auth for all tests by default."""
+    with patch("chronometry.web_server._api_token", None):
+        yield
+
+
 class TestConfiguration:
     """Tests for web server configuration."""
 
+    @patch("chronometry.web_server._ensure_server_secrets", return_value=("test-secret", "test-token"))
     @patch("chronometry.web_server.load_config")
     @patch("chronometry.web_server.ensure_absolute_path")
-    def test_init_config_success(self, mock_ensure, mock_load):
+    def test_init_config_success(self, mock_ensure, mock_load, mock_secrets):
         """Test successful configuration initialization."""
         mock_load.return_value = {
             "root_dir": "./data",
@@ -30,21 +38,22 @@ class TestConfiguration:
 
         assert app.config["SECRET_KEY"] == "test-secret"
 
+    @patch("chronometry.web_server._ensure_server_secrets", return_value=("generated-key", "generated-token"))
     @patch("chronometry.web_server.load_config")
-    def test_init_config_uses_defaults(self, mock_load):
-        """Test that defaults are used when not in config."""
+    def test_init_config_uses_generated_secrets(self, mock_load, mock_secrets):
+        """Test that secrets are auto-generated when not in config."""
         mock_load.return_value = {
             "root_dir": "./data",
-            "server": {},  # Empty server config
+            "server": {},
         }
 
         init_config()
 
-        # Should use default secret key
-        assert app.config["SECRET_KEY"] == "change-me-in-production"
+        assert app.config["SECRET_KEY"] == "generated-key"
 
+    @patch("chronometry.web_server._ensure_server_secrets", return_value=("k", "t"))
     @patch("chronometry.web_server.load_config")
-    def test_init_config_handles_error(self, mock_load):
+    def test_init_config_handles_error(self, mock_load, mock_secrets):
         """Test configuration error handling."""
         mock_load.side_effect = Exception("Config failed")
 
@@ -601,15 +610,16 @@ class TestWebSocketEvents:
     """Tests for WebSocket event handlers."""
 
     def test_handle_connect(self):
-        """Test WebSocket connect handler."""
+        """Test WebSocket connect handler within request context."""
         from chronometry.web_server import handle_connect
 
-        with patch("chronometry.web_server.emit") as mock_emit:
-            handle_connect()
+        with app.test_request_context(headers={"Origin": "http://localhost:8051"}):
+            with patch("chronometry.web_server.emit") as mock_emit:
+                handle_connect()
 
-            mock_emit.assert_called_once()
-            call_args = mock_emit.call_args
-            assert call_args[0][0] == "connected"
+                mock_emit.assert_called_once()
+                call_args = mock_emit.call_args
+                assert call_args[0][0] == "connected"
 
     def test_handle_disconnect(self):
         """Test WebSocket disconnect handler."""
@@ -751,25 +761,136 @@ class TestSystemHealthEndpoint:
         assert data["error"] == "Failed to load system health"
 
 
-class TestSecretKeyWarning:
-    """Tests for secret key warning at startup."""
+class TestSecretKeyGeneration:
+    """Tests for automatic secret key generation at startup."""
 
+    @patch("chronometry.web_server._ensure_server_secrets")
     @patch("chronometry.web_server.load_config")
     @patch("chronometry.web_server.ensure_absolute_path")
-    @patch("chronometry.web_server.logger")
-    def test_warns_on_default_secret_key(self, mock_logger, mock_ensure, mock_load):
-        """Test that a warning is logged when SECRET_KEY is the insecure default."""
+    def test_uses_generated_secret_key(self, mock_ensure, mock_load, mock_secrets):
+        """Test that init_config uses the key from _ensure_server_secrets."""
+        mock_secrets.return_value = ("auto-generated-key", "auto-generated-token")
         mock_load.return_value = {
             "root_dir": "./data",
-            "server": {"secret_key": "change-me-in-production"},
+            "server": {},
         }
         mock_ensure.return_value = "/abs/data"
 
         init_config()
 
-        mock_logger.warning.assert_any_call(
-            "SECRET_KEY is the insecure default! Run 'chrono init' or set server.secret_key in user_config.yaml."
+        assert app.config["SECRET_KEY"] == "auto-generated-key"
+
+
+class TestAuthentication:
+    """Tests for the API authentication system.
+
+    These tests run WITH auth enabled (not disabled by the autouse fixture)
+    to verify the token-based auth actually works.
+    """
+
+    TEST_TOKEN = "test-secret-token-abc123"
+
+    @pytest.fixture
+    def auth_client(self):
+        """Create a test client with auth enabled."""
+        app.config["TESTING"] = True
+        with patch("chronometry.web_server._api_token", self.TEST_TOKEN):
+            with app.test_client() as client:
+                yield client
+
+    @pytest.fixture
+    def setup_config(self):
+        """Setup configuration for tests."""
+        with patch(
+            "chronometry.web_server.config",
+            {
+                "root_dir": "/tmp/test",
+                "capture": {"capture_interval_seconds": 900, "monitor_index": 1, "retention_days": 30},
+                "annotation": {"batch_size": 4, "prompt": "Test"},
+                "timeline": {"bucket_minutes": 15},
+                "digest": {"interval_seconds": 3600},
+            },
+        ):
+            yield
+
+    def test_protected_endpoint_returns_401_without_token(self, auth_client, setup_config):
+        """Test that @require_auth endpoints reject unauthenticated requests."""
+        response = auth_client.get("/api/config")
+
+        assert response.status_code == 401
+        data = response.get_json()
+        assert data["error"] == "Unauthorized"
+
+    def test_protected_endpoint_accepts_bearer_token(self, auth_client, setup_config):
+        """Test that @require_auth endpoints accept valid Bearer token."""
+        response = auth_client.get(
+            "/api/config",
+            headers={"Authorization": f"Bearer {self.TEST_TOKEN}"},
         )
+
+        assert response.status_code == 200
+
+    def test_protected_endpoint_accepts_cookie(self, auth_client, setup_config):
+        """Test that @require_auth endpoints accept valid cookie."""
+        auth_client.set_cookie("chrono_token", self.TEST_TOKEN, domain="localhost")
+        response = auth_client.get("/api/config")
+
+        assert response.status_code == 200
+
+    def test_protected_endpoint_rejects_invalid_token(self, auth_client, setup_config):
+        """Test that @require_auth endpoints reject invalid Bearer token."""
+        response = auth_client.get(
+            "/api/config",
+            headers={"Authorization": "Bearer wrong-token"},
+        )
+
+        assert response.status_code == 401
+
+    def test_protected_endpoint_rejects_invalid_cookie(self, auth_client, setup_config):
+        """Test that @require_auth endpoints reject invalid cookie."""
+        auth_client.set_cookie("chrono_token", "wrong-token", domain="localhost")
+        response = auth_client.get("/api/config")
+
+        assert response.status_code == 401
+
+    def test_health_endpoint_requires_no_auth(self, auth_client):
+        """Test that /api/health is accessible without auth."""
+        response = auth_client.get("/api/health")
+
+        assert response.status_code == 200
+
+    def test_dashboard_sets_auth_cookie(self, auth_client):
+        """Test that the dashboard route sets the chrono_token cookie."""
+        response = auth_client.get("/")
+
+        assert response.status_code == 200
+        set_cookie = response.headers.get("Set-Cookie", "")
+        assert "chrono_token=" in set_cookie
+        assert "HttpOnly" in set_cookie
+        assert "SameSite=Strict" in set_cookie
+
+    @patch("chronometry.web_server.load_annotations")
+    @patch("chronometry.web_server.group_activities")
+    @patch("chronometry.web_server.get_daily_dir")
+    def test_export_csv_requires_auth(self, mock_daily_dir, mock_group, mock_load, auth_client, setup_config, tmp_path):
+        """Test that /api/export/csv requires authentication."""
+        response = auth_client.get("/api/export/csv?date=2025-11-01")
+
+        assert response.status_code == 401
+
+    def test_export_json_requires_auth(self, auth_client, setup_config):
+        """Test that /api/export/json requires authentication."""
+        response = auth_client.get("/api/export/json?date=2025-11-01")
+
+        assert response.status_code == 401
+
+    @patch("chronometry.web_server.get_daily_dir")
+    @patch("chronometry.web_server.ensure_absolute_path")
+    def test_frame_image_requires_auth(self, mock_ensure, mock_daily_dir, auth_client, setup_config):
+        """Test that /api/frames/<date>/<timestamp>/image requires authentication."""
+        response = auth_client.get("/api/frames/2025-11-01/20251101_100000/image")
+
+        assert response.status_code == 401
 
 
 if __name__ == "__main__":

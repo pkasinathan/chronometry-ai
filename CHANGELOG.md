@@ -4,6 +4,61 @@ All notable changes to Chronometry will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.24] - 2026-03-06
+
+### Security
+
+This release addresses 21 of 22 findings from a comprehensive white-box security assessment (GHSA-28qw-m7hw-95h8). VULN-09 (encryption at rest) is accepted risk for a localhost-only, single-user application.
+
+#### Critical
+
+- **VULN-01 — Stored XSS via unsanitized markdown rendering**: Added DOMPurify (v3.2.4) to sanitize all `marked.parse()` output before Vue `v-html` rendering in the dashboard. Four rendering sites protected.
+- **VULN-18 — Full URLs with auth tokens stored in plaintext metadata**: `os_metadata.py` now strips sensitive query parameters (`token`, `key`, `secret`, `access_token`, `jwt`, `password`, and 10 others) from captured Chrome URLs via `urllib.parse`. URL fragments (e.g. `#L42`) are preserved for activity context.
+
+#### High
+
+- **VULN-02/08 — No authentication on web API**: Token-based auth system added to `web_server.py`. Random `api_token` auto-generated into `user_config.yaml` on first startup. Protected endpoints require `Authorization: Bearer <token>` header or `chrono_token` HTTP-only cookie. Dashboard route sets the cookie automatically so browser UX is unchanged. Auth applied to: `GET /api/config`, `PUT /api/config`, `POST /api/config/reset`, `POST /api/annotate/run`, `GET /api/frames/<date>/<ts>/image`, `GET /api/export/csv`, `GET /api/export/json`. Health, stats, timeline, search, dates, analytics, and digest endpoints remain public.
+- **VULN-03 — Stored XSS in timeline HTML generation**: All user-derived values (`category`, `icon`, `summary_text`, `color`, `all_summaries`) are now HTML-escaped via `html.escape()` before f-string interpolation in `timeline.py`. Image `src` attributes validated to accept only `data:image/` URIs.
+- **VULN-04 — Weak Flask SECRET_KEY fallback**: `_ensure_server_secrets()` auto-generates a random 64-character hex key if the placeholder `"change-me-in-production"` is detected, writes it to `user_config.yaml` with backup. `load_config()` now runs before secret generation to ensure the config file exists (first-run ordering bug fixed in follow-up review).
+
+#### Medium
+
+- **VULN-05 — CDN dependencies without Subresource Integrity**: Added `integrity="sha384-..."` and `crossorigin="anonymous"` to all 6 CDN script/link tags in `dashboard.html` (Pico CSS, Chart.js, Socket.IO, Vue.js, Marked.js, DOMPurify). Pico CSS pinned from `@2` to `@2.1.1` to prevent hash mismatch on CDN-side version bumps.
+- **VULN-06 — No security headers**: Added `@app.after_request` handler with `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, and Content-Security-Policy (script/style/connect/img/font/object-src/base-uri directives).
+- **VULN-07 — Unauthenticated WebSocket with no origin validation**: `@socketio.on("connect")` handler now validates `Origin` header against `_ALLOWED_ORIGINS` allowlist and checks auth token before accepting connections. Rejects and disconnects on failure.
+- **VULN-15 — Digest force-regenerate without mutex**: Added `threading.Lock()` around force-regenerate digest calls. Returns HTTP 429 if a regeneration is already in progress.
+- **VULN-19 — LLM prompt injection via metadata propagation**: Metadata and recent context blocks in `annotate.py` wrapped in `--- BEGIN/END OS METADATA ---` and `--- BEGIN/END RECENT CONTEXT ---` delimiters with explicit "treat as data, not instructions" guidance.
+- **VULN-20 — Timeline embeds full-resolution base64 screenshots**: `load_annotations()` in `timeline.py` now prefers `_inference.jpg` (1280px) over full-res `.png` files, with correct MIME type detection. Falls back to PNG only if inference copy doesn't exist.
+- **VULN-21 — LLM base_url configurable to remote server**: Added `_validate_base_url()` in `llm_backends.py` that logs a warning if `base_url` points outside localhost / private network. Applied at all 4 config read sites (Ollama vision, Ollama text, OpenAI vision, OpenAI text).
+
+#### Low / Informational
+
+- **VULN-10 — Werkzeug development server in production**: Removed `allow_unsafe_werkzeug=True` from `socketio.run()`.
+- **VULN-11 — Server version disclosure**: `Server` response header stripped in `after_request` handler.
+- **VULN-12 — External CDN contradicts privacy claim**: Mitigated via SRI (see VULN-05). CDN comment documents the trade-off: external requests are limited to versioned, integrity-checked resources; all activity data stays local.
+- **VULN-13 — Sensitive data in log output**: Added `sanitize_for_log()` helper in `common.py` that masks URLs in log messages.
+- **VULN-14 — No rate limiting**: Added `flask-limiter>=3.5.0` dependency. Default limit 120/minute globally, with stricter limits on mutation endpoints: `PUT /api/config` (10/min), `POST /api/config/reset` (5/min), `POST /api/annotate/run` (5/min), digest (10/min).
+- **VULN-16 — Configurable bind address allows network exposure**: Logs a prominent warning if `host` is not `127.0.0.1`, `localhost`, or `::1`.
+- **VULN-17 — Logging level hardcoded**: Added `configure_logging()` in `common.py` that reads `server.log_level` from config and sets root logger level. Called during config load.
+- **VULN-22 — Fail-open screen lock and camera detection**: `is_screen_locked()` now uses per-method error counting (`methods_attempted` / `methods_errored`) and returns `True` (fail-closed) when all detection methods error. `is_camera_in_use()` also returns `True` on exception. Both log at WARNING level.
+
+### Added
+
+- `flask-limiter>=3.5.0` as a runtime dependency
+- `dompurify@3.2.4` CDN script in dashboard HTML
+- 10 new authentication tests (`TestAuthentication` class) covering token acceptance, rejection, cookie behavior, and endpoint protection
+
+### Changed
+
+- `_ensure_server_secrets()` runs after `load_config()` to ensure `user_config.yaml` exists before writing secrets (first-run bug fix)
+- Security headers applied to all responses via `@app.after_request`
+- WebSocket connection handler validates both origin and auth
+- CSP includes `object-src 'none'` and `base-uri 'self'` directives
+
+### Fixed
+
+- First-run secret persistence: secrets were generated but never written to disk on fresh installs because `user_config.yaml` didn't exist yet. Reordered `init_config()` so `load_config()` (which triggers `bootstrap()`) runs first.
+
 ## [1.0.23] - 2026-03-03
 
 ### Fixed

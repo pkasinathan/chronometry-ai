@@ -6,17 +6,14 @@
     <title>Chronometry</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⏱️</text></svg>">
     
-    <!-- Pico CSS (same base as sentinel-ui) -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
-    
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <!-- Socket.IO -->
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <!-- Vue.js -->
-    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.8/dist/vue.global.prod.js"></script>
-    <!-- Marked.js -->
-    <script src="https://cdn.jsdelivr.net/npm/marked@11.0.0/marked.min.js"></script>
+    <!-- CDN assets with SRI — external requests are limited to these versioned,
+         integrity-checked resources. All activity data stays local. -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.1.1/css/pico.min.css" integrity="sha384-L1dWfspMTHU/ApYnFiMz2QID/PlP1xCW9visvBdbEkOLkSSWsP6ZJWhPw6apiXxU" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" integrity="sha384-e6nUZLBkQ86NJ6TVVKAeSaK8jWa3NhkYWZFomE39AvDbQWeie9PlQqM3pmYW5d1g" crossorigin="anonymous"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js" integrity="sha384-/KNQL8Nu5gCHLqwqfQjA689Hhoqgi2S84SNUxC3roTe4EhJ9AfLkp8QiQcU8AMzI" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.3.8/dist/vue.global.prod.js" integrity="sha384-SLdVW/DHgIarqz+lkTvI/TMPtxz2lzfvRXRPhFeAmT7Q30gR+5eemnlGdEL7ruDI" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.0.0/marked.min.js" integrity="sha384-4Tu0AVV0VM7dUwfPXGZDt6OI+2sNBSrQZe1Gmz87gzoio1n3IeHCMwRrfqSi4/Oh" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js" integrity="sha384-eEu5CTj3qGvu9PdJuS+YlkNi7d2XxQROAFYOr59zgObtlcux1ae1Il3u7jvdCSWu" crossorigin="anonymous"></script>
     
     <style>
         /* ── Global Font Scale (sentinel-ui convention) ── */
@@ -1907,8 +1904,8 @@
                 viewFrameFullSize(f) { window.open(this.getFrameImageUrl(f), '_blank'); },
                 renderMarkdown(t) {
                     if (!t) return '';
-                    try { return marked.parse(t, { breaks:true, gfm:true }); }
-                    catch(e) { return t; }
+                    try { return DOMPurify.sanitize(marked.parse(t, { breaks:true, gfm:true })); }
+                    catch(e) { return DOMPurify.sanitize(t); }
                 }
             },
             computed: {

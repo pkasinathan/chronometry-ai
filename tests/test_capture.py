@@ -351,15 +351,14 @@ class TestScreenLockDetection:
             assert result is False
 
     @patch("chronometry.capture.subprocess.run")
-    def test_detection_failure_failsafe(self, mock_run):
-        """Test that detection failure defaults to unlocked (fail-safe)."""
+    def test_detection_failure_failclosed(self, mock_run):
+        """Test that detection failure assumes locked (fail-closed)."""
         with patch.dict("sys.modules", {"Quartz": None}):
             mock_run.side_effect = Exception("Detection failed")
 
             result = is_screen_locked()
 
-            # Should return False (fail-safe to allowing capture)
-            assert result is False
+            assert result is True
 
 
 class TestCameraDetection:
@@ -430,14 +429,13 @@ class TestCameraDetection:
         assert result is False
 
     @patch("chronometry.capture.subprocess.run")
-    def test_camera_detection_failure_failsafe(self, mock_run):
-        """Test that detection failure defaults to not in use (fail-safe)."""
+    def test_camera_detection_failure_failclosed(self, mock_run):
+        """Test that detection failure assumes camera in use (fail-closed)."""
         mock_run.side_effect = Exception("Detection failed")
 
         result = is_camera_in_use()
 
-        # Should return False (fail-safe to allowing capture)
-        assert result is False
+        assert result is True
 
 
 class TestSyntheticAnnotation:

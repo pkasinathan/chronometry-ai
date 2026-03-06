@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+import re
 import shutil
 import subprocess
 from datetime import datetime, timedelta
 from importlib.resources import files as pkg_files
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
 import yaml
 
@@ -16,6 +18,27 @@ from chronometry import CHRONOMETRY_HOME
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+_URL_RE = re.compile(r"https?://\S+")
+
+
+def configure_logging(level_name: str = "INFO") -> None:
+    """Set the root log level from a config string (e.g. 'DEBUG', 'WARNING')."""
+    level = getattr(logging, level_name.upper(), logging.INFO)
+    logging.getLogger().setLevel(level)
+
+
+def sanitize_for_log(text: str) -> str:
+    """Mask URLs and shorten file paths for safer log output."""
+    def _mask_url(m: str) -> str:
+        try:
+            parsed = urlparse(m)
+            return urlunparse(parsed._replace(query="***", fragment=""))
+        except Exception:
+            return m
+
+    result = _URL_RE.sub(lambda m: _mask_url(m.group(0)), text)
+    return result
 
 
 # Notification message constants
@@ -240,6 +263,9 @@ def load_config(
                     config["timeline"]["output_dir"] = str(Path(config["paths"]["output_dir"]).expanduser())
                 if "logs_dir" in config["paths"]:
                     config["paths"]["logs_dir"] = str(Path(config["paths"]["logs_dir"]).expanduser())
+
+            log_level = config.get("server", {}).get("log_level", "INFO")
+            configure_logging(log_level)
 
             logger.info("Configuration loaded successfully")
 

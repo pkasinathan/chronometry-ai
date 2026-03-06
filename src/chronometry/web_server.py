@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import functools
 import io
 import logging
 import os
 import re
+import secrets
 import threading
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -14,9 +16,11 @@ from pathlib import Path
 
 import pandas as pd
 import yaml
-from flask import Flask, Response, jsonify, render_template, request, send_file
+from flask import Flask, Response, jsonify, make_response, render_template, request, send_file
 from flask_cors import CORS
-from flask_socketio import SocketIO, emit
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_socketio import SocketIO, disconnect, emit
 
 from chronometry import CHRONOMETRY_HOME
 from chronometry.annotate import annotate_frames
@@ -49,10 +53,55 @@ _ALLOWED_ORIGINS = ["http://localhost:8051", "http://127.0.0.1:8051"]
 CORS(app, origins=_ALLOWED_ORIGINS)
 socketio = SocketIO(app, cors_allowed_origins=_ALLOWED_ORIGINS)
 
+limiter = Limiter(get_remote_address, app=app, default_limits=["120/minute"], storage_uri="memory://")
+
 # Global config
 config = None
+_api_token: str | None = None
 _annotation_running = False
 _annotation_lock = threading.Lock()
+_digest_lock = threading.Lock()
+
+
+# ── Security headers ────────────────────────────────────────────────────────
+@app.after_request
+def _set_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdn.socket.io; "
+        "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+        "img-src 'self' data:; "
+        "connect-src 'self' ws://localhost:8051 ws://127.0.0.1:8051; "
+        "font-src 'self' https://cdn.jsdelivr.net; "
+        "object-src 'none'; "
+        "base-uri 'self'"
+    )
+    response.headers.pop("Server", None)
+    return response
+
+
+# ── Authentication ──────────────────────────────────────────────────────────
+def _check_auth() -> bool:
+    """Validate the request carries a valid auth token (header or cookie)."""
+    if _api_token is None:
+        return True
+    bearer = request.headers.get("Authorization", "")
+    if bearer.startswith("Bearer ") and bearer[7:] == _api_token:
+        return True
+    return request.cookies.get("chrono_token") == _api_token
+
+
+def require_auth(fn):
+    """Decorator that rejects unauthenticated requests with 401."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not _check_auth():
+            return jsonify({"error": "Unauthorized"}), 401
+        return fn(*args, **kwargs)
+    return wrapper
 
 _TIMESTAMP_RE = re.compile(r"^\d{8}_\d{6}$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -81,22 +130,49 @@ def _clamp_days(raw: str | None, default: int = 7) -> int:
     return max(1, min(d, _MAX_DAYS))
 
 
+def _ensure_server_secrets() -> tuple[str, str]:
+    """Return (secret_key, api_token), auto-generating into user_config.yaml if missing."""
+    config_dir = CHRONOMETRY_HOME / "config"
+    user_config_path = config_dir / "user_config.yaml"
+
+    user_cfg: dict = {}
+    if user_config_path.exists():
+        with open(user_config_path) as f:
+            user_cfg = yaml.safe_load(f) or {}
+
+    server_block = user_cfg.setdefault("server", {})
+    changed = False
+
+    if server_block.get("secret_key") in (None, "", "change-me-in-production"):
+        server_block["secret_key"] = secrets.token_hex(32)
+        changed = True
+        logger.info("Generated random SECRET_KEY in user_config.yaml")
+
+    if not server_block.get("api_token"):
+        server_block["api_token"] = secrets.token_urlsafe(32)
+        changed = True
+        logger.info("Generated API auth token in user_config.yaml")
+
+    if changed and user_config_path.exists():
+        backup_config(user_config_path)
+        with open(user_config_path, "w") as f:
+            yaml.dump(user_cfg, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+    return server_block["secret_key"], server_block["api_token"]
+
+
 def init_config():
     """Initialize configuration."""
-    global config
+    global config, _api_token
     try:
         config = load_config()
 
         if "root_dir" in config:
             config["root_dir"] = ensure_absolute_path(config["root_dir"])
 
-        server_config = config.get("server", {})
-        app.config["SECRET_KEY"] = server_config.get("secret_key", "change-me-in-production")
-
-        if app.config["SECRET_KEY"] == "change-me-in-production":
-            logger.warning(
-                "SECRET_KEY is the insecure default! Run 'chrono init' or set server.secret_key in user_config.yaml."
-            )
+        secret_key, api_token = _ensure_server_secrets()
+        app.config["SECRET_KEY"] = secret_key
+        _api_token = api_token
 
         logger.info(f"Configuration loaded successfully. Root dir: {config.get('root_dir')}")
     except Exception as e:
@@ -111,8 +187,11 @@ def init_config():
 @app.route("/search")
 @app.route("/settings")
 def index():
-    """Serve the main dashboard page."""
-    return render_template("dashboard.html")
+    """Serve the main dashboard page and set the auth cookie for API access."""
+    resp = make_response(render_template("dashboard.html"))
+    if _api_token:
+        resp.set_cookie("chrono_token", _api_token, httponly=True, samesite="Strict", path="/")
+    return resp
 
 
 @app.route("/api/health")
@@ -124,6 +203,7 @@ def health_check():
 
 
 @app.route("/api/config")
+@require_auth
 def get_config():
     """Get current user-level configuration (exposed in UI)."""
     return jsonify(
@@ -183,6 +263,8 @@ def get_config():
 
 
 @app.route("/api/config", methods=["PUT"])
+@require_auth
+@limiter.limit("10/minute")
 def update_config():
     """Update user configuration using proper YAML serialization.
 
@@ -250,6 +332,8 @@ def update_config():
 
 
 @app.route("/api/config/reset", methods=["POST"])
+@require_auth
+@limiter.limit("5/minute")
 def reset_config():
     """Reset configuration to defaults with backup.
 
@@ -272,6 +356,8 @@ def reset_config():
 
 
 @app.route("/api/annotate/run", methods=["POST"])
+@require_auth
+@limiter.limit("5/minute")
 def run_annotation():
     """Trigger annotation, timeline, and digest in a background thread."""
     global _annotation_running
@@ -580,6 +666,7 @@ def get_analytics():
 
 
 @app.route("/api/export/csv")
+@require_auth
 def export_csv():
     """Export timeline data as CSV."""
     try:
@@ -630,6 +717,7 @@ def export_csv():
 
 
 @app.route("/api/export/json")
+@require_auth
 def export_json():
     """Export timeline data as JSON."""
     try:
@@ -744,6 +832,7 @@ def get_frame_stats():
 
 
 @app.route("/api/frames/<date>/<timestamp>/image")
+@require_auth
 def get_frame_image(date, timestamp):
     """Get a specific frame image."""
     try:
@@ -814,6 +903,7 @@ def get_system_health():
 
 @app.route("/api/digest")
 @app.route("/api/digest/<date>")
+@limiter.limit("10/minute")
 def get_digest(date=None):
     """Get daily digest summary."""
     try:
@@ -826,7 +916,16 @@ def get_digest(date=None):
 
         force_regenerate = request.args.get("force", "false").lower() == "true"
 
-        digest = get_or_generate_digest(date_obj, config, force_regenerate=force_regenerate)
+        if force_regenerate:
+            acquired = _digest_lock.acquire(blocking=False)
+            if not acquired:
+                return jsonify({"error": "Digest regeneration already in progress"}), 429
+            try:
+                digest = get_or_generate_digest(date_obj, config, force_regenerate=True)
+            finally:
+                _digest_lock.release()
+        else:
+            digest = get_or_generate_digest(date_obj, config, force_regenerate=False)
 
         return jsonify(digest)
     except Exception as e:
@@ -837,7 +936,16 @@ def get_digest(date=None):
 # WebSocket events for real-time updates
 @socketio.on("connect")
 def handle_connect():
-    """Handle client connection."""
+    """Handle client connection with origin validation."""
+    origin = request.headers.get("Origin", "")
+    if origin and origin not in _ALLOWED_ORIGINS:
+        logger.warning(f"WebSocket connection rejected: origin {origin} not in allowlist")
+        disconnect()
+        return
+    if not _check_auth():
+        logger.warning("WebSocket connection rejected: missing auth")
+        disconnect()
+        return
     logger.info("Client connected")
     emit("connected", {"message": "Connected to Chronometry server"})
 
@@ -882,9 +990,16 @@ def main():
         port = server_config.get("port", 8051)
         debug = server_config.get("debug", False)
 
+        if host not in ("127.0.0.1", "localhost", "::1"):
+            logger.warning(
+                "⚠️  Server is binding to %s — the API will be reachable from the network. "
+                "Authentication is enabled but consider using 127.0.0.1 for maximum safety.",
+                host,
+            )
+
         logger.info(f"Starting server on http://{host}:{port}")
 
-        socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=True)
+        socketio.run(app, host=host, port=port, debug=debug)
 
     except Exception as e:
         logger.error(f"Fatal error starting web server: {e}", exc_info=True)

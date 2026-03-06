@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import html as html_mod
 import json
 import logging
 import re
@@ -160,16 +161,21 @@ def load_annotations(daily_dir: Path, json_suffix: str = ".json") -> list[dict]:
             data["datetime"] = parse_timestamp(timestamp_str)
             data["timestamp_str"] = timestamp_str
 
-            # Try to load corresponding image as base64 (synthetic annotations have image_file=null)
+            # Prefer smaller inference JPEG over full-res PNG for timeline embedding
+            inference_path = json_path.parent / f"{timestamp_str}_inference.jpg"
             img_filename = data.get("image_file") or f"{timestamp_str}.png"
             img_path = json_path.parent / img_filename
-            if img_path.exists():
+
+            chosen_path = inference_path if inference_path.exists() else img_path
+            mime = "image/jpeg" if chosen_path.suffix == ".jpg" else "image/png"
+
+            if chosen_path.exists():
                 try:
-                    with open(img_path, "rb") as img_f:
+                    with open(chosen_path, "rb") as img_f:
                         img_data = base64.b64encode(img_f.read()).decode("utf-8")
-                        data["image_base64"] = f"data:image/png;base64,{img_data}"
+                        data["image_base64"] = f"data:{mime};base64,{img_data}"
                 except Exception as img_error:
-                    logger.warning(f"Failed to load image {img_path}: {img_error}")
+                    logger.warning(f"Failed to load image {chosen_path}: {img_error}")
                     data["image_base64"] = None
             else:
                 data["image_base64"] = None
@@ -402,21 +408,25 @@ def generate_timeline_html(activities: list[dict], stats: dict, date: datetime) 
         # Get the first frame's image for preview
         image_data = activity["frames"][0].get("image_base64", "")
 
-        # Combine summaries (show first 2)
         summary_text = activity["summaries"][0] if activity["summaries"] else "No summary"
         more_frames = len(activity["frames"]) - 1
 
+        esc_category = html_mod.escape(activity["category"])
+        esc_icon = html_mod.escape(activity["icon"])
+        esc_summary = html_mod.escape(summary_text[:120])
+        esc_color = html_mod.escape(activity["color"])
+
         activity_cards_html += f"""
         <div class="activity-card" data-activity-id="{idx}"
-             style="--card-color: {activity["color"]};">
+             style="--card-color: {esc_color};">
             <div class="activity-time">{start_time}</div>
             <div class="activity-content">
                 <div class="activity-header">
-                    <span class="activity-icon">{activity["icon"]}</span>
-                    <span class="activity-title">{activity["category"]}</span>
+                    <span class="activity-icon">{esc_icon}</span>
+                    <span class="activity-title">{esc_category}</span>
                 </div>
                 <div class="activity-duration">{start_time} to {end_time}</div>
-                <div class="activity-summary">{summary_text[:120]}{"..." if len(summary_text) > 120 else ""}</div>
+                <div class="activity-summary">{esc_summary}{"..." if len(summary_text) > 120 else ""}</div>
                 {f'<div class="activity-frames">+{more_frames} more frame{"s" if more_frames != 1 else ""}</div>' if more_frames > 0 else ""}
             </div>
         </div>
@@ -431,23 +441,28 @@ def generate_timeline_html(activities: list[dict], stats: dict, date: datetime) 
 
         image_data = activity["frames"][0].get("image_base64", "")
 
-        # All summaries for detail view
-        all_summaries = "<br>".join([f"• {s}" for s in activity["summaries"][:5]])
+        all_summaries = "<br>".join([f"• {html_mod.escape(s)}" for s in activity["summaries"][:5]])
         if len(activity["summaries"]) > 5:
             all_summaries += f"<br>• ... and {len(activity['summaries']) - 5} more"
+
+        esc_icon_d = html_mod.escape(activity["icon"])
+        esc_cat_d = html_mod.escape(activity["category"])
+
+        # Only allow data-URI images to prevent injection via src attribute
+        safe_image = image_data if image_data and image_data.startswith("data:image/") else ""
 
         detail_panels_html += f"""
         <div class="detail-panel" id="detail-{idx}" style="display: none;">
             <div class="detail-header">
                 <div>
-                    <h2><span class="activity-icon">{activity["icon"]}</span> {activity["category"]}</h2>
+                    <h2><span class="activity-icon">{esc_icon_d}</span> {esc_cat_d}</h2>
                     <div class="detail-time">{start_time} to {end_time}</div>
                 </div>
                 <button class="close-detail" onclick="closeDetail()">&times;</button>
             </div>
 
             <div class="detail-screenshot">
-                {f'<img src="{image_data}" alt="Screenshot" />' if image_data else '<div class="no-screenshot">No screenshot available</div>'}
+                {f'<img src="{safe_image}" alt="Screenshot" />' if safe_image else '<div class="no-screenshot">No screenshot available</div>'}
             </div>
 
             <div class="detail-section">
@@ -464,7 +479,7 @@ def generate_timeline_html(activities: list[dict], stats: dict, date: datetime) 
             <div class="detail-metrics">
                 <div class="metric">
                     <div class="metric-label">CATEGORY</div>
-                    <div class="metric-value">{activity["category"]}</div>
+                    <div class="metric-value">{esc_cat_d}</div>
                 </div>
                 <div class="metric">
                     <div class="metric-label">DURATION</div>
@@ -479,7 +494,9 @@ def generate_timeline_html(activities: list[dict], stats: dict, date: datetime) 
     filter_buttons = '<button class="filter-btn active" data-filter="all">⭐ All tasks</button>'
     for category in all_categories:
         activity = next(a for a in activities if a["category"] == category)
-        filter_buttons += f'<button class="filter-btn" data-filter="{category}">{activity["icon"]} {category}</button>'
+        esc_cat_f = html_mod.escape(category)
+        esc_icon_f = html_mod.escape(activity["icon"])
+        filter_buttons += f'<button class="filter-btn" data-filter="{esc_cat_f}">{esc_icon_f} {esc_cat_f}</button>'
 
     html = f"""
     <!DOCTYPE html>

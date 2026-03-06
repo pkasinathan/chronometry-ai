@@ -11,8 +11,30 @@ import logging
 import re
 import subprocess
 from datetime import datetime
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
+
+_SENSITIVE_PARAMS = frozenset({
+    "token", "key", "secret", "auth", "session", "code",
+    "access_token", "api_key", "apikey", "password", "credential",
+    "jwt", "refresh_token", "client_secret", "state", "nonce",
+    "id_token", "authorization",
+})
+
+
+def _strip_sensitive_url_params(url: str) -> str:
+    """Remove query parameters whose names suggest authentication credentials."""
+    try:
+        parsed = urlparse(url)
+        if not parsed.query:
+            return url
+        params = parse_qs(parsed.query, keep_blank_values=True)
+        filtered = {k: v for k, v in params.items() if k.lower() not in _SENSITIVE_PARAMS}
+        cleaned = parsed._replace(query=urlencode(filtered, doseq=True))
+        return urlunparse(cleaned)
+    except Exception:
+        return url
 
 
 def _run_osascript(script: str, timeout: float = 2.0) -> str | None:
@@ -118,7 +140,8 @@ def capture_metadata() -> dict:
         metadata["window_title"] = None
 
     try:
-        metadata["url"] = get_chrome_url(active_app=active_app)
+        raw_url = get_chrome_url(active_app=active_app)
+        metadata["url"] = _strip_sensitive_url_params(raw_url) if raw_url else None
     except Exception as e:
         logger.debug(f"Failed to get Chrome URL: {e}")
         metadata["url"] = None
