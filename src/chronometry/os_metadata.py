@@ -15,12 +15,28 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
 
-_SENSITIVE_PARAMS = frozenset({
-    "token", "key", "secret", "auth", "session", "code",
-    "access_token", "api_key", "apikey", "password", "credential",
-    "jwt", "refresh_token", "client_secret", "state", "nonce",
-    "id_token", "authorization",
-})
+_SENSITIVE_PARAMS = frozenset(
+    {
+        "token",
+        "key",
+        "secret",
+        "auth",
+        "session",
+        "code",
+        "access_token",
+        "api_key",
+        "apikey",
+        "password",
+        "credential",
+        "jwt",
+        "refresh_token",
+        "client_secret",
+        "state",
+        "nonce",
+        "id_token",
+        "authorization",
+    }
+)
 
 
 def _strip_sensitive_url_params(url: str) -> str:

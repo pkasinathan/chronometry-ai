@@ -30,6 +30,7 @@ def configure_logging(level_name: str = "INFO") -> None:
 
 def sanitize_for_log(text: str) -> str:
     """Mask URLs and shorten file paths for safer log output."""
+
     def _mask_url(m: str) -> str:
         try:
             parsed = urlparse(m)

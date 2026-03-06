@@ -96,12 +96,15 @@ def _check_auth() -> bool:
 
 def require_auth(fn):
     """Decorator that rejects unauthenticated requests with 401."""
+
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         if not _check_auth():
             return jsonify({"error": "Unauthorized"}), 401
         return fn(*args, **kwargs)
+
     return wrapper
+
 
 _TIMESTAMP_RE = re.compile(r"^\d{8}_\d{6}$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")

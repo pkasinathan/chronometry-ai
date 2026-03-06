@@ -39,6 +39,7 @@ def _validate_base_url(base_url: str) -> str:
         pass
     return base_url
 
+
 _inference_lock = threading.Lock()
 
 
