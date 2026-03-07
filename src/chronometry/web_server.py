@@ -1002,7 +1002,12 @@ def main():
 
         logger.info(f"Starting server on http://{host}:{port}")
 
-        socketio.run(app, host=host, port=port, debug=debug)
+        # allow_unsafe_werkzeug: Flask-SocketIO requires eventlet/gevent for its
+        # async server; without either, it falls back to Werkzeug. This flag is
+        # required to permit that fallback. The underlying VULN-10 concerns
+        # (debug info leakage, version disclosure) are mitigated separately:
+        # debug=False by default, Server header stripped in _set_security_headers.
+        socketio.run(app, host=host, port=port, debug=debug, allow_unsafe_werkzeug=True)
 
     except Exception as e:
         logger.error(f"Fatal error starting web server: {e}", exc_info=True)
