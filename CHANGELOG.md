@@ -4,6 +4,11 @@ All notable changes to Chronometry will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.26] - 2026-03-06
+
+### Fixed
+- Added `'unsafe-eval'` to CSP `script-src` directive — Vue.js's in-browser template compiler uses `new Function()` which requires it. Without it the dashboard rendered a blank page.
+
 ## [1.0.25] - 2026-03-06
 
 ### Fixed
