@@ -4,6 +4,11 @@ All notable changes to Chronometry will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.0.25] - 2026-03-06
+
+### Fixed
+- Restored `allow_unsafe_werkzeug=True` in `socketio.run()` — Flask-SocketIO requires eventlet or gevent for its async server; without either, it falls back to Werkzeug and this flag is required to start. Removing it (per VULN-10) crashed the web server on every launch. The underlying concerns (debug info leakage, version disclosure) are mitigated separately: `debug=False` by default, `Server` header stripped.
+
 ## [1.0.24] - 2026-03-06
 
 ### Security

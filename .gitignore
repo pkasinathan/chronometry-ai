@@ -81,4 +81,5 @@ tools/
 
 # Chronometry specific
 *.png.json
+.agents/skills/security-assessment
 
