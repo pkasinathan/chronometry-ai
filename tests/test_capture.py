@@ -429,13 +429,39 @@ class TestCameraDetection:
         assert result is False
 
     @patch("chronometry.capture.subprocess.run")
-    def test_camera_detection_failure_failclosed(self, mock_run):
-        """Test that detection failure assumes camera in use (fail-closed)."""
+    def test_camera_detection_failure_failopen(self, mock_run):
+        """Test that detection failure does NOT assume camera in use (fail-open).
+
+        Unlike screen-lock detection (which fails closed), camera detection
+        fails open because a false positive blocks all captures while the
+        tool is local-only so a false negative is low-risk.
+        """
         mock_run.side_effect = Exception("Detection failed")
 
         result = is_camera_in_use()
 
-        assert result is True
+        assert result is False
+
+    @patch("chronometry.capture.subprocess.run")
+    def test_single_method_timeout_does_not_block_others(self, mock_run):
+        """Regression: a timeout in one method must not cause a false positive.
+
+        Reproduces the real-world bug where the Chrome lsof command (Method 3)
+        timed out, the outer except caught it, and returned True even though
+        the camera was not in use.
+        """
+        from subprocess import TimeoutExpired
+
+        mock_run.side_effect = [
+            Mock(stdout="", returncode=0),  # Method 1: system logs — no camera
+            Mock(stdout="", returncode=0),  # Method 2: ioreg — no camera
+            TimeoutExpired("lsof", 4),      # Method 3: Chrome CMIO — timeout
+            Mock(returncode=1),             # Method 4: pgrep — no FaceTime
+        ]
+
+        result = is_camera_in_use()
+
+        assert result is False
 
 
 class TestSyntheticAnnotation:

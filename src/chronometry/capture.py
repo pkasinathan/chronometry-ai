@@ -183,65 +183,62 @@ def is_camera_in_use() -> bool:
     """Check if camera is currently in use (video calls, etc.).
 
     Checks macOS Control Center camera indicator (the green icon in menubar).
+    Each method handles its own errors so a timeout in one doesn't mask the
+    result of the others.
     """
+    # Method 1: Check system logs for camera streaming (most accurate)
     try:
-        # MOST ACCURATE: Check for camera indicator in Control Center
-        # When camera is in use, macOS shows a green camera icon in the menubar
-        # This is managed by the Control Center process
-
-        # Check system logs for camera streaming
         result = subprocess.run(
             ["log", "show", "--predicate", 'subsystem == "com.apple.cmio"', "--last", "5s", "--info"],
             capture_output=True,
             text=True,
             timeout=3,
         )
-
-        # Look for active streaming indicators
         if "Starting" in result.stdout or "stream" in result.stdout.lower():
             logger.info("📹 Camera detected in use via system logs")
             return True
+    except Exception as e:
+        logger.debug(f"Camera detection method 1 (system logs) failed: {e}")
 
-        # Method 2: Check ioreg for camera interface (works for native apps)
+    # Method 2: Check ioreg for camera interface (works for native apps)
+    try:
         ioreg_result = subprocess.run(
             ["ioreg", "-r", "-n", "AppleCameraInterface", "-w", "0"], capture_output=True, text=True, timeout=2
         )
-
-        # When camera LED is on, IOUserClientCreator will be present
         if "IOUserClientCreator" in ioreg_result.stdout:
             logger.info("📹 Camera detected in use via ioreg")
             return True
+    except Exception as e:
+        logger.debug(f"Camera detection method 2 (ioreg) failed: {e}")
 
-        # Method 3: Check for camera framework usage by Chrome
-        # If Chrome has CMIO (CoreMediaIO) files open, camera might be active
+    # Method 3: Check for camera framework usage by Chrome
+    try:
         lsof_result = subprocess.run(
             ["sh", "-c", 'lsof -c "Google Chrome Helper" 2>/dev/null | grep -c CMIO'],
             capture_output=True,
             text=True,
-            timeout=2,
+            timeout=4,
         )
-
         try:
             cmio_count = int(lsof_result.stdout.strip())
-            # If Chrome has multiple CMIO files open (>10), camera is likely active
-            # Increased threshold from 5 to 10 to reduce false positives
             if cmio_count > 10:
                 logger.info(f"📹 Camera detected in use via Chrome CMIO ({cmio_count} files)")
                 return True
-        except Exception:
+        except ValueError:
             pass
+    except Exception as e:
+        logger.debug(f"Camera detection method 3 (Chrome CMIO) failed: {e}")
 
-        # Method 4: Check for FaceTime
+    # Method 4: Check for FaceTime
+    try:
         facetime_check = subprocess.run(["pgrep", "-x", "FaceTime"], capture_output=True, timeout=1)
         if facetime_check.returncode == 0:
             logger.info("📹 Camera likely in use via FaceTime")
             return True
-
-        return False
-
     except Exception as e:
-        logger.warning(f"Camera detection failed — assuming in use for safety: {e}")
-        return True
+        logger.debug(f"Camera detection method 4 (FaceTime) failed: {e}")
+
+    return False
 
 
 def capture_region_interactive(config: dict, show_notifications: bool = True) -> bool:
