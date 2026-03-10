@@ -455,8 +455,8 @@ class TestCameraDetection:
         mock_run.side_effect = [
             Mock(stdout="", returncode=0),  # Method 1: system logs — no camera
             Mock(stdout="", returncode=0),  # Method 2: ioreg — no camera
-            TimeoutExpired("lsof", 4),      # Method 3: Chrome CMIO — timeout
-            Mock(returncode=1),             # Method 4: pgrep — no FaceTime
+            TimeoutExpired("lsof", 4),  # Method 3: Chrome CMIO — timeout
+            Mock(returncode=1),  # Method 4: pgrep — no FaceTime
         ]
 
         result = is_camera_in_use()
