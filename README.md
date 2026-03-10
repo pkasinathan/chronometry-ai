@@ -10,14 +10,6 @@
 
 Chronometry captures periodic screenshots of your desktop, annotates them with a local vision model (Ollama), and generates daily digests of your work activities — all running entirely on your machine.
 
-## What's New (1.0.18)
-
-- **System Health panel** in Settings with live counters for capture, annotation, LLM calls, digest generation, and uptime
-- **Reset to Defaults** in Settings (with automatic config backups)
-- **Config model cleanup**: `system_config.yaml` now contains all defaults; `user_config.yaml` stores overrides only
-- **Digest prompt templates** are editable in the dashboard
-- **Improved privacy UX** for skipped captures (clear placeholder instead of broken image areas)
-
 ## Features
 
 - **Screenshot Capture** — Periodic screenshots with configurable intervals, automatic downscaling for inference, pre-capture notifications, and screen lock detection

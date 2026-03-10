@@ -1730,7 +1730,11 @@
                     this.annotationRunning = true;
                     this.showToast('Annotation started — this may take a few minutes', 'toast-info', 5000);
                     try {
-                        const r = await fetch('/api/annotate/run', { method: 'POST' });
+                        const r = await fetch('/api/annotate/run', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ date: this.selectedDate })
+                        });
                         if (!r.ok) { this.showToast('Failed to start annotation', 'toast-info'); this.annotationRunning = false; return; }
                         const data = await r.json();
                         if (data.status === 'already_running') {

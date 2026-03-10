@@ -457,7 +457,41 @@ class TestFrameAnnotation:
     def test_annotate_frames_checks_yesterday(
         self, mock_daily_dir, mock_json_path, mock_post_format, mock_process, test_config, tmp_path
     ):
-        """Test that yesterday's folder is checked for unannotated frames."""
+        """Test that yesterday's folder is checked when no explicit date is given."""
+        yesterday_dir = tmp_path / "frames" / "2025-10-31"
+        yesterday_dir.mkdir(parents=True)
+
+        today_dir = tmp_path / "frames" / "2025-11-01"
+        today_dir.mkdir(parents=True)
+
+        def get_daily_side_effect(root, date):
+            if date.day == 31:
+                return yesterday_dir
+            return today_dir
+
+        mock_daily_dir.side_effect = get_daily_side_effect
+
+        png_file = yesterday_dir / "20251031_235900.png"
+        png_file.write_bytes(b"fake image")
+
+        mock_json_path.side_effect = lambda p, suffix: p.with_suffix(".json")
+        mock_process.side_effect = lambda batch, config: [p.with_suffix(".json") for p in batch]
+
+        with patch("chronometry.annotate.datetime") as mock_dt:
+            mock_dt.now.return_value = datetime(2025, 11, 1)
+            mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
+            count = annotate_frames(test_config)
+
+        assert count == 1
+
+    @patch("chronometry.annotate.process_batch")
+    @patch("chronometry.annotate.post_format_annotations")
+    @patch("chronometry.annotate.get_json_path")
+    @patch("chronometry.annotate.get_daily_dir")
+    def test_annotate_frames_explicit_date_skips_yesterday(
+        self, mock_daily_dir, mock_json_path, mock_post_format, mock_process, test_config, tmp_path
+    ):
+        """Test that yesterday's folder is NOT checked when an explicit date is given."""
         yesterday_dir = tmp_path / "frames" / "2025-10-31"
         yesterday_dir.mkdir(parents=True)
 
@@ -479,7 +513,8 @@ class TestFrameAnnotation:
 
         count = annotate_frames(test_config, datetime(2025, 11, 1))
 
-        assert count == 1
+        assert count == 0
+        mock_process.assert_not_called()
 
     @patch("chronometry.annotate.process_batch")
     @patch("chronometry.annotate.post_format_annotations")

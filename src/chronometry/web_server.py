@@ -365,20 +365,29 @@ def run_annotation():
     """Trigger annotation, timeline, and digest in a background thread."""
     global _annotation_running
 
+    data = request.get_json(silent=True) or {}
+    target_date_str = data.get("date")
+    target_date = None
+    if target_date_str:
+        target_date, err = _validate_date_param(target_date_str)
+        if err:
+            return jsonify({"error": err}), 400
+
     with _annotation_lock:
         if _annotation_running:
             return jsonify({"status": "already_running"})
         _annotation_running = True
 
-    def _run():
+    def _run(date):
         global _annotation_running
         try:
             show_notification("Chronometry", "Annotation started — this may take a few minutes")
-            count = annotate_frames(config)
+            count = annotate_frames(config, date=date)
             logger.info(f"Annotation complete: {count} frames")
             generate_timeline(config)
             logger.info("Timeline regenerated after annotation")
-            digest = generate_daily_digest(datetime.now(), config)
+            digest_date = date if date else datetime.now()
+            digest = generate_daily_digest(digest_date, config)
             logger.info(f"Digest regenerated after annotation: {digest.get('total_activities', 0)} activities")
             socketio.emit(
                 "annotation_complete",
@@ -393,7 +402,7 @@ def run_annotation():
             with _annotation_lock:
                 _annotation_running = False
 
-    threading.Thread(target=_run, daemon=True).start()
+    threading.Thread(target=_run, args=(target_date,), daemon=True).start()
     return jsonify({"status": "started"})
 
 

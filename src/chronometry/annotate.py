@@ -422,14 +422,16 @@ def post_format_annotations(json_paths: list[Path], config: dict) -> int:
 def annotate_frames(config: dict, date: datetime = None) -> int:
     """Annotate all unannotated frames for a given date.
 
-    Also checks yesterday's folder for any remaining unannotated frames to handle
-    edge case where frames captured near midnight don't reach batch_size threshold.
+    When no date is provided (automatic/scheduled runs), checks both today and
+    yesterday to catch cross-midnight frames. When an explicit date is provided
+    (user-triggered for a specific day), only that date's directory is checked.
 
     Returns:
         Number of frames successfully saved during the vision pass.
     """
     from chronometry.runtime_stats import stats
 
+    explicit_date = date is not None
     root_dir = config["root_dir"]
     annotation_config = config["annotation"]
     batch_size = annotation_config.get("screenshot_analysis_batch_size", 1)
@@ -438,27 +440,24 @@ def annotate_frames(config: dict, date: datetime = None) -> int:
         batch_size = 1
     json_suffix = annotation_config.get("json_suffix", ".json")
 
-    # Get directory for the date
     if date is None:
         date = datetime.now()
 
-    # Collect unannotated frames from multiple directories
     unannotated = []
     dirs_to_check = []
 
-    # Always check yesterday's folder first (to catch cross-midnight frames)
-    yesterday = date - timedelta(days=1)
-    yesterday_dir = get_daily_dir(root_dir, yesterday)
-    if yesterday_dir.exists():
-        dirs_to_check.append((yesterday, yesterday_dir))
+    if not explicit_date:
+        yesterday = date - timedelta(days=1)
+        yesterday_dir = get_daily_dir(root_dir, yesterday)
+        if yesterday_dir.exists():
+            dirs_to_check.append((yesterday, yesterday_dir))
 
-    # Then check today's folder
     daily_dir = get_daily_dir(root_dir, date)
     if daily_dir.exists():
         dirs_to_check.append((date, daily_dir))
 
     if not dirs_to_check:
-        logger.info(f"No frames found for {format_date(date)} or previous day")
+        logger.info(f"No frames found for {format_date(date)}")
         return 0
 
     # Find all PNG files without corresponding JSON across checked directories
