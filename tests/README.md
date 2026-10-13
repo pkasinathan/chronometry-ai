@@ -177,20 +177,17 @@ Located in `fixtures/`:
 
 ### Mock Vision API (annotation backend)
 ```python
-@patch('src.llm_backends.call_ollama_vision')
+@patch("src.llm_backends.call_ollama_vision")
 def test_vision(mock_vision):
-    mock_vision.return_value = {'summary': 'test', 'sources': []}
+    mock_vision.return_value = {"summary": "test", "sources": []}
     # Test code
 ```
 
 ### Mock Text API (digest backend)
 ```python
-@patch('src.digest.call_text_api')
+@patch("src.digest.call_text_api")
 def test_text(mock_text):
-    mock_text.return_value = {
-        'content': 'test', 'tokens': 0,
-        'prompt_tokens': 0, 'completion_tokens': 0
-    }
+    mock_text.return_value = {"content": "test", "tokens": 0, "prompt_tokens": 0, "completion_tokens": 0}
     # Test code
 ```
 
@@ -205,13 +202,13 @@ def test_with_temp_files(tmp_path):
 
 ### Mock Screenshots
 ```python
-@patch('capture.Image')
-@patch('capture.mss.mss')
+@patch("capture.Image")
+@patch("capture.mss.mss")
 def test_capture(mock_mss, mock_image):
     mock_screenshot = Mock()
     mock_screenshot.size = (1920, 1080)
-    mock_screenshot.bgra = b'\x00' * (1920 * 1080 * 4)
-    
+    mock_screenshot.bgra = b"\x00" * (1920 * 1080 * 4)
+
     mock_sct = Mock()
     mock_sct.grab.return_value = mock_screenshot
     mock_mss.return_value.__enter__.return_value = mock_sct
@@ -230,15 +227,18 @@ def test_unit():
     """Unit test marker"""
     pass
 
+
 @pytest.mark.integration
 def test_integration():
     """Integration test marker"""
     pass
 
+
 @pytest.mark.slow
 def test_slow():
     """Slow test marker (> 1 second)"""
     pass
+
 
 @pytest.mark.requires_api
 def test_api():
@@ -319,7 +319,8 @@ pytest tests/ -v -n auto
 # Good
 def test_categorize_code_activity():
     """Test code activity categorization."""
-    
+
+
 # Bad
 def test_1():
     """Test something."""
@@ -345,9 +346,11 @@ def test_category():
     category, icon, color = categorize_activity("coding")
     assert category == "Code"
 
+
 def test_icon():
     category, icon, color = categorize_activity("coding")
     assert icon == "💻"
+
 
 # Acceptable (related assertions)
 def test_categorize_code():
@@ -361,10 +364,8 @@ def test_categorize_code():
 ```python
 @pytest.fixture
 def test_config():
-    return {
-        'root_dir': '/tmp/test',
-        'capture': {...}
-    }
+    return {"root_dir": "/tmp/test", "capture": {...}}
+
 
 def test_with_config(test_config):
     # Use test_config
@@ -374,8 +375,8 @@ def test_with_config(test_config):
 ### 5. Mock External Dependencies
 ```python
 # Always mock external APIs, file system (when appropriate), time
-@patch('module.external_api')
-@patch('module.datetime')
+@patch("module.external_api")
+@patch("module.datetime")
 def test_function(mock_datetime, mock_api):
     # Test with mocks
     pass
