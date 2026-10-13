@@ -1,0 +1,12 @@
+# Development and Testing Dependencies
+# Install with: pip install -r requirements-dev.txt
+# Or use: pip install -e ".[dev]"  (preferred, uses pyproject.toml)
+
+# Test framework
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+
+# Code quality (ruff replaces black, flake8, isort, pylint)
+ruff>=0.4.0
+mypy>=1.5.0
